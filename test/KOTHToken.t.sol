@@ -38,4 +38,20 @@ contract KOTHTokenTest is Test {
         token.transfer(victim, maxAllowed);
         assertEq(token.balanceOf(victim), maxAllowed);
     }
+
+    function test_ExemptAddressBypassesLimit() public {
+        address pool = makeAddr("pool");
+        address[] memory exemptions = new address[](1);
+        exemptions[0] = pool;
+        KOTHToken t2 = new KOTHToken(exemptions);
+        t2.transfer(pool, 5_000_000 ether);   // 50%, way over 1% cap
+        assertEq(t2.balanceOf(pool), 5_000_000 ether);
+    }
+
+    function test_AntiSniperLiftsAfter100Blocks() public {
+        address victim = makeAddr("victim");
+        vm.roll(block.number + 100);
+        token.transfer(victim, 5_000_000 ether);
+        assertEq(token.balanceOf(victim), 5_000_000 ether);
+    }
 }
