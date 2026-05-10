@@ -54,4 +54,17 @@ contract KOTHTokenTest is Test {
         token.transfer(victim, 5_000_000 ether);
         assertEq(token.balanceOf(victim), 5_000_000 ether);
     }
+
+    function test_SetHookOnce() public {
+        address fakeHook = makeAddr("hook");
+        token.setHook(fakeHook);
+        assertEq(token.hook(), fakeHook);
+        assertTrue(token.isExempt(fakeHook));
+    }
+
+    function test_SetHookRevertsOnSecondCall() public {
+        token.setHook(makeAddr("hook1"));
+        vm.expectRevert(KOTHToken.HookAlreadySet.selector);
+        token.setHook(makeAddr("hook2"));
+    }
 }

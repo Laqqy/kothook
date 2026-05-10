@@ -12,13 +12,22 @@ contract KOTHToken is ERC20, ERC20Burnable {
 
     mapping(address => bool) public isExempt;
 
+    address public hook;
+
     error AntiSniperLimit(uint256 wouldHave, uint256 maxAllowed);
+    error HookAlreadySet();
 
     constructor(address[] memory exemptions) ERC20("King of the Hill", "KOTH") {
         LAUNCH_BLOCK = block.number;
         isExempt[msg.sender] = true;
         for (uint256 i; i < exemptions.length; ++i) isExempt[exemptions[i]] = true;
         _mint(msg.sender, TOTAL_SUPPLY);
+    }
+
+    function setHook(address _hook) external {
+        if (hook != address(0)) revert HookAlreadySet();
+        hook = _hook;
+        isExempt[_hook] = true;
     }
 
     function _update(address from, address to, uint256 value) internal override {
