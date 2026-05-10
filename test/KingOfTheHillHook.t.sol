@@ -300,19 +300,20 @@ contract KingOfTheHillHookTest is DeployFixture {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // J.1 — Non-router swap cannot change the crown
+    // J.1 — Hybrid identification: stock router swap still crowns via tx.origin
     // ──────────────────────────────────────────────────────────────────────────
 
-    function test_SwapViaStockRouterDoesNotCrown() public {
-        // The fixture's `swapRouter` from Deployers is a stock v4 PoolSwapTest that
-        // does NOT pass our hookData. Swaps through it must NOT change the crown.
+    function test_SwapViaStockRouterCrownsViaTxOrigin() public {
+        // The fixture's `swapRouter` from Deployers is a stock v4 PoolSwapTest.
+        // With Hybrid identification, the hook falls back to tx.origin so
+        // swaps via Universal Router / aggregators / trading bots still play.
         address alice = makeAddr("alice");
         deal(alice, 5 ether);
 
-        // Use swapRouter directly (no hookData). Buy 1 ETH worth via swapRouter (zeroForOne).
-        vm.startPrank(alice);
-        deal(address(alice), 5 ether);
-
+        // tx.origin defaults to the test contract; we want it to be alice so the
+        // crown attribution makes sense. vm.startPrank(alice, alice) sets both
+        // msg.sender and tx.origin.
+        vm.startPrank(alice, alice);
         swapRouter.swap{value: 1 ether}(
             pk,
             IPoolManager.SwapParams({
@@ -321,12 +322,12 @@ contract KingOfTheHillHookTest is DeployFixture {
                 sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
             }),
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
-            ""    // empty hookData — hook should ignore for game logic
+            ""    // no hookData — hook will fall back to tx.origin
         );
         vm.stopPrank();
 
-        // Crown unchanged (still 0) because sender != kothRouter
-        assertEq(kothHook.currentKing(), address(0));
+        // Alice gets crowned because tx.origin == alice
+        assertEq(kothHook.currentKing(), alice);
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -209,11 +209,7 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
             return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
         }
 
-        // Identify the user (only when going through our trusted router)
-        address msgSender = address(0);
-        if (sender == router && hookData.length == 32) {
-            msgSender = abi.decode(hookData, (address));
-        }
+        address msgSender = _identifyUser(sender, hookData);
 
         bool isBuy = params.zeroForOne;
         uint256 specifiedAmt = uint256(-params.amountSpecified);
@@ -251,6 +247,21 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
         } else {
             treasuryBalance += amount;
         }
+    }
+
+    /// @dev Hybrid EOA identification:
+    ///      1. Swap via our trusted KOTHRouter with hookData → use hookData address
+    ///         (smart-wallet friendly; signed by the router we control)
+    ///      2. Any other router (Universal Router, 1inch, MetaMask Swap, gmgn, axiom)
+    ///         → fall back to tx.origin so the trader on the other end still plays.
+    ///      tx.origin caveat: smart-contract wallets going through third-party routers
+    ///      will have tx.origin = bundler/relayer, so the crown goes to the bundler.
+    ///      Smart-wallet users should swap via our KOTHRouter for correct attribution.
+    function _identifyUser(address sender, bytes calldata hookData) internal view returns (address) {
+        if (sender == router && hookData.length == 32) {
+            return abi.decode(hookData, (address));
+        }
+        return tx.origin;
     }
 
     // ============ Pull payment ============
@@ -373,9 +384,9 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
             }
         }
 
-        // King-crowning logic (only on buys via our router)
-        if (isBuy && sender == router && hookData.length == 32) {
-            address msgSender = abi.decode(hookData, (address));
+        // King-crowning logic (only on buys; works for any router via _identifyUser)
+        if (isBuy) {
+            address msgSender = _identifyUser(sender, hookData);
             if (msgSender != address(0)) {
                 // grossEth = |amountSpecified|. Threshold compares against gross.
                 uint256 grossEth = uint256(-params.amountSpecified);
