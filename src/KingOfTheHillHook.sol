@@ -9,12 +9,16 @@ import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+
 import {KOTHToken} from "./KOTHToken.sol";
 import {ChronicleSoul} from "./ChronicleSoul.sol";
 import {ChronicleScroll} from "./ChronicleScroll.sol";
-import {Reign, REASON_OVERTHROWN, REASON_DUMP} from "./Types.sol";
+import {Reign, REASON_OVERTHROWN, REASON_DUMP, REASON_FORFEIT} from "./Types.sol";
 
-contract KingOfTheHillHook is IHooks {
+contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     // ============ Constants ============
     uint256 public constant DECAY_BLOCKS    = 3600;
     uint256 public constant KING_FEE_BPS    = 200;     // 2%
@@ -247,6 +251,85 @@ contract KingOfTheHillHook is IHooks {
         } else {
             treasuryBalance += amount;
         }
+    }
+
+    // ============ Pull payment ============
+
+    function claim() external nonReentrant {
+        uint256 amount = kingBalances[msg.sender];
+        if (amount == 0) revert NothingToClaim();
+        kingBalances[msg.sender] = 0;
+        (bool ok,) = msg.sender.call{value: amount}("");
+        if (!ok) revert TransferFailed();
+        emit Claimed(msg.sender, amount);
+    }
+
+    function claimTreasury() external nonReentrant {
+        if (msg.sender != treasury) revert OnlyTreasury();
+        uint256 amount = treasuryBalance;
+        if (amount == 0) revert NothingToClaim();
+        treasuryBalance = 0;
+        (bool ok,) = treasury.call{value: amount}("");
+        if (!ok) revert TransferFailed();
+        emit TreasuryClaimed(amount);
+    }
+
+    // ============ Forfeit ============
+
+    function forfeit(address staleKing) external nonReentrant {
+        uint256 dethronedAtBlock = dethronedAt[staleKing];
+        if (dethronedAtBlock == 0) revert NotDethroned();
+        if (block.number <= dethronedAtBlock + FORFEIT_BLOCKS) revert TooEarly();
+
+        uint256 amount = kingBalances[staleKing];
+        if (amount == 0) revert NothingToForfeit();
+
+        kingBalances[staleKing] = 0;
+        dethronedAt[staleKing] = 0;
+
+        uint256 tip = amount * KEEPER_TIP_BPS / 10_000;
+        uint256 toBurn = amount - tip;
+
+        (bool ok,) = msg.sender.call{value: tip}("");
+        if (!ok) revert TransferFailed();
+
+        // Internal swap ETH → KOTH bypassing king mechanics
+        bytes32 burnSlot = INTERNAL_BURN_TSLOT;
+        assembly { tstore(burnSlot, 1) }
+        uint256 kothBought = abi.decode(
+            poolManager.unlock(abi.encode(toBurn)),
+            (uint256)
+        );
+        assembly { tstore(burnSlot, 0) }
+
+        koth.burnFromHook(kothBought);
+        emit Forfeited(staleKing, amount, tip, kothBought);
+    }
+
+    function unlockCallback(bytes calldata raw) external returns (bytes memory) {
+        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
+        uint256 ethAmount = abi.decode(raw, (uint256));
+
+        BalanceDelta delta = poolManager.swap(
+            poolKey,
+            IPoolManager.SwapParams({
+                zeroForOne: true,
+                amountSpecified: -int256(ethAmount),
+                sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+            }),
+            ""   // empty hookData → not a router swap
+        );
+
+        // Settle ETH (we owe it from our own balance)
+        poolManager.settle{value: ethAmount}();
+
+        // Take KOTH out
+        int128 a1 = delta.amount1();
+        require(a1 > 0, "neg KOTH out");
+        uint256 kothOut = uint256(uint128(a1));
+        poolManager.take(poolKey.currency1, address(this), kothOut);
+
+        return abi.encode(kothOut);
     }
 
     function afterSwap(
