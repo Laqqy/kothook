@@ -6,7 +6,8 @@ import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
+import {Currency} from "v4-core/src/types/Currency.sol";
 
 import {KOTHToken} from "./KOTHToken.sol";
 import {ChronicleSoul} from "./ChronicleSoul.sol";
@@ -186,17 +187,71 @@ contract KingOfTheHillHook is IHooks {
     }
 
     function beforeSwap(
-        address,
-        PoolKey calldata,
-        IPoolManager.SwapParams calldata,
-        bytes calldata
-    ) external pure returns (bytes4, BeforeSwapDelta, uint24) {
-        return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        bytes calldata hookData
+    ) external returns (bytes4, BeforeSwapDelta, uint24) {
+        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
+
+        // Skip game logic during internal forfeit-burn swaps
+        uint256 isInternal;
+        bytes32 burnSlot = INTERNAL_BURN_TSLOT;
+        assembly { isInternal := tload(burnSlot) }
+        if (isInternal != 0) return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+
+        // Only support exactInput in v1
+        if (params.amountSpecified >= 0) {
+            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
+
+        // Identify the user (only when going through our trusted router)
+        address msgSender = address(0);
+        if (sender == router && hookData.length == 32) {
+            msgSender = abi.decode(hookData, (address));
+        }
+
+        bool isBuy = params.zeroForOne;
+        uint256 specifiedAmt = uint256(-params.amountSpecified);
+
+        // Sell + king dumping → dethrone immediately (before fees so fee credits new state)
+        if (!isBuy && msgSender != address(0) && msgSender == currentKing) {
+            _dethroneFor(msgSender, REASON_DUMP);
+        }
+
+        // Take fee from the specified currency
+        // Buy: ETH (currency0) → 2% to king/treasury
+        // Sell: KOTH (currency1) → 1% burned
+        uint256 fee;
+        if (isBuy) {
+            fee = specifiedAmt * KING_FEE_BPS / 10_000;
+            if (fee > 0) {
+                poolManager.take(key.currency0, address(this), fee);
+                _creditEth(fee);
+            }
+        } else {
+            fee = specifiedAmt * BURN_FEE_BPS / 10_000;
+            if (fee > 0) {
+                poolManager.take(key.currency1, address(this), fee);
+                koth.burnFromHook(fee);
+            }
+        }
+
+        BeforeSwapDelta delta = toBeforeSwapDelta(int128(int256(fee)), 0);
+        return (IHooks.beforeSwap.selector, delta, 0);
+    }
+
+    function _creditEth(uint256 amount) internal {
+        if (currentKing != address(0)) {
+            kingBalances[currentKing] += amount;
+        } else {
+            treasuryBalance += amount;
+        }
     }
 
     function afterSwap(
         address sender,
-        PoolKey calldata,
+        PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
         bytes calldata hookData
@@ -209,34 +264,53 @@ contract KingOfTheHillHook is IHooks {
         assembly { isInternal := tload(burnSlot) }
         if (isInternal != 0) return (IHooks.afterSwap.selector, 0);
 
-        // Only buys (zeroForOne) can crown a new king
-        if (!params.zeroForOne) return (IHooks.afterSwap.selector, 0);
+        // Only support exactInput
+        if (params.amountSpecified >= 0) return (IHooks.afterSwap.selector, 0);
 
-        // Only swaps via our trusted router can change the crown.
-        // Other senders (aggregators, direct PoolManager callers) bypass the game.
-        if (sender != router) return (IHooks.afterSwap.selector, 0);
-        if (hookData.length != 32) return (IHooks.afterSwap.selector, 0);
-        address msgSender = abi.decode(hookData, (address));
-        if (msgSender == address(0)) return (IHooks.afterSwap.selector, 0);
-
-        // For exact-input buys, amount0 is negative (user paid ETH).
-        int128 a0 = delta.amount0();
-        if (a0 >= 0) return (IHooks.afterSwap.selector, 0);
-        uint256 ethSpent = uint256(uint128(-a0));
-
-        if (ethSpent > getThreshold()) {
-            address oldKing = currentKing;
-            if (oldKing != address(0)) {
-                _dethroneFor(oldKing, REASON_OVERTHROWN);
+        bool isBuy = params.zeroForOne;
+        // Take unspecified-side fee:
+        //   Buy: 1% KOTH (currency1) → burn
+        //   Sell: 2% ETH (currency0) → king/treasury
+        int128 unspecifiedAmt = isBuy ? delta.amount1() : delta.amount0();
+        uint256 unspecifiedFee = 0;
+        if (unspecifiedAmt > 0) {
+            uint256 grossOut = uint256(uint128(unspecifiedAmt));
+            if (isBuy) {
+                unspecifiedFee = grossOut * BURN_FEE_BPS / 10_000;
+                if (unspecifiedFee > 0) {
+                    poolManager.take(key.currency1, address(this), unspecifiedFee);
+                    koth.burnFromHook(unspecifiedFee);
+                }
+            } else {
+                unspecifiedFee = grossOut * KING_FEE_BPS / 10_000;
+                if (unspecifiedFee > 0) {
+                    poolManager.take(key.currency0, address(this), unspecifiedFee);
+                    _creditEth(unspecifiedFee);
+                }
             }
-            currentKing = msgSender;
-            highestBuyAmount = ethSpent;
-            highestBuyBlock = block.number;
-            dethronedAt[msgSender] = 0;
-            emit NewKing(msgSender, ethSpent, block.number);
         }
 
-        return (IHooks.afterSwap.selector, 0);
+        // King-crowning logic (only on buys via our router)
+        if (isBuy && sender == router && hookData.length == 32) {
+            address msgSender = abi.decode(hookData, (address));
+            if (msgSender != address(0)) {
+                // grossEth = |amountSpecified|. Threshold compares against gross.
+                uint256 grossEth = uint256(-params.amountSpecified);
+                if (grossEth > getThreshold()) {
+                    address oldKing = currentKing;
+                    if (oldKing != address(0)) {
+                        _dethroneFor(oldKing, REASON_OVERTHROWN);
+                    }
+                    currentKing = msgSender;
+                    highestBuyAmount = grossEth;
+                    highestBuyBlock = block.number;
+                    dethronedAt[msgSender] = 0;
+                    emit NewKing(msgSender, grossEth, block.number);
+                }
+            }
+        }
+
+        return (IHooks.afterSwap.selector, int128(int256(unspecifiedFee)));
     }
 
     function _dethroneFor(address oldKing, bytes32 reason) internal {
