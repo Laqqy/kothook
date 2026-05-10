@@ -67,4 +67,26 @@ contract KOTHTokenTest is Test {
         vm.expectRevert(KOTHToken.HookAlreadySet.selector);
         token.setHook(makeAddr("hook2"));
     }
+
+    function test_BurnFromHookOnlyByHook() public {
+        address fakeHook = makeAddr("hook");
+        token.setHook(fakeHook);
+        token.transfer(fakeHook, 1000 ether);
+
+        vm.expectRevert(KOTHToken.OnlyHook.selector);
+        token.burnFromHook(500 ether);
+    }
+
+    function test_BurnFromHookReducesSupply() public {
+        address fakeHook = makeAddr("hook");
+        token.setHook(fakeHook);
+        token.transfer(fakeHook, 1000 ether);
+
+        uint256 supplyBefore = token.totalSupply();
+        vm.prank(fakeHook);
+        token.burnFromHook(400 ether);
+
+        assertEq(token.totalSupply(), supplyBefore - 400 ether);
+        assertEq(token.balanceOf(fakeHook), 600 ether);
+    }
 }

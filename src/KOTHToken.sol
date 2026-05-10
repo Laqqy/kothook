@@ -16,6 +16,7 @@ contract KOTHToken is ERC20, ERC20Burnable {
 
     error AntiSniperLimit(uint256 wouldHave, uint256 maxAllowed);
     error HookAlreadySet();
+    error OnlyHook();
 
     constructor(address[] memory exemptions) ERC20("King of the Hill", "KOTH") {
         LAUNCH_BLOCK = block.number;
@@ -28,6 +29,11 @@ contract KOTHToken is ERC20, ERC20Burnable {
         if (hook != address(0)) revert HookAlreadySet();
         hook = _hook;
         isExempt[_hook] = true;
+    }
+
+    function burnFromHook(uint256 amount) external {
+        if (msg.sender != hook) revert OnlyHook();
+        _burn(hook, amount);
     }
 
     function _update(address from, address to, uint256 value) internal override {
