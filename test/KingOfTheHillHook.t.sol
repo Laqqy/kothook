@@ -328,4 +328,53 @@ contract KingOfTheHillHookTest is DeployFixture {
         // Crown unchanged (still 0) because sender != kothRouter
         assertEq(kothHook.currentKing(), address(0));
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // J.2 — Events are emitted
+    // ──────────────────────────────────────────────────────────────────────────
+
+    function test_NewKingEventEmitted() public {
+        address alice = makeAddr("alice");
+        deal(alice, 5 ether);
+
+        vm.recordLogs();
+        vm.prank(alice);
+        kothRouter.buy{value: 1 ether}(0);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        bool found = false;
+        bytes32 sigNewKing = keccak256("NewKing(address,uint256,uint256)");
+        for (uint i; i < entries.length; ++i) {
+            if (entries[i].topics[0] == sigNewKing && entries[i].emitter == address(kothHook)) {
+                found = true;
+                // topic[1] = indexed king
+                assertEq(address(uint160(uint256(entries[i].topics[1]))), alice);
+                break;
+            }
+        }
+        assertTrue(found, "NewKing not emitted");
+    }
+
+    function test_KingDethronedEventEmitted() public {
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        deal(alice, 5 ether); deal(bob, 5 ether);
+
+        vm.prank(alice); kothRouter.buy{value: 2 ether}(0);
+
+        vm.recordLogs();
+        vm.prank(bob); kothRouter.buy{value: 2.5 ether}(0);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        bool found = false;
+        bytes32 sig = keccak256("KingDethroned(address,bytes32,uint256)");
+        for (uint i; i < entries.length; ++i) {
+            if (entries[i].topics[0] == sig && entries[i].emitter == address(kothHook)) {
+                found = true;
+                assertEq(address(uint160(uint256(entries[i].topics[1]))), alice);
+                break;
+            }
+        }
+        assertTrue(found, "KingDethroned not emitted");
+    }
 }
