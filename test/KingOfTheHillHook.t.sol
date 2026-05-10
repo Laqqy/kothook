@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import "forge-std/Test.sol";
 import {DeployFixture} from "./helpers/DeployFixture.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {PoolSwapTest} from "v4-core/src/test/PoolSwapTest.sol";
+import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 
 contract KingOfTheHillHookTest is DeployFixture {
     function setUp() public {
@@ -293,5 +297,35 @@ contract KingOfTheHillHookTest is DeployFixture {
 
         // KOTH burned
         assertLt(koth.totalSupply(), supplyPre);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // J.1 — Non-router swap cannot change the crown
+    // ──────────────────────────────────────────────────────────────────────────
+
+    function test_SwapViaStockRouterDoesNotCrown() public {
+        // The fixture's `swapRouter` from Deployers is a stock v4 PoolSwapTest that
+        // does NOT pass our hookData. Swaps through it must NOT change the crown.
+        address alice = makeAddr("alice");
+        deal(alice, 5 ether);
+
+        // Use swapRouter directly (no hookData). Buy 1 ETH worth via swapRouter (zeroForOne).
+        vm.startPrank(alice);
+        deal(address(alice), 5 ether);
+
+        swapRouter.swap{value: 1 ether}(
+            pk,
+            IPoolManager.SwapParams({
+                zeroForOne: true,
+                amountSpecified: -1 ether,
+                sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+            }),
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ""    // empty hookData — hook should ignore for game logic
+        );
+        vm.stopPrank();
+
+        // Crown unchanged (still 0) because sender != kothRouter
+        assertEq(kothHook.currentKing(), address(0));
     }
 }
