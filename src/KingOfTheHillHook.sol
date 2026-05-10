@@ -104,6 +104,36 @@ contract KingOfTheHillHook is IHooks {
         poolKeySet = true;
     }
 
+    // ============ Decay views ============
+
+    /// @notice Linearly-decayed record. Reaches zero exactly DECAY_BLOCKS after the high.
+    function getDecayedRecord() public view returns (uint256) {
+        if (highestBuyAmount == 0) return 0;
+        uint256 elapsed = block.number - highestBuyBlock;
+        if (elapsed >= DECAY_BLOCKS) return 0;
+        return highestBuyAmount * (DECAY_BLOCKS - elapsed) / DECAY_BLOCKS;
+    }
+
+    /// @notice The amount a buyer must exceed (in ETH) to dethrone the current king.
+    function getThreshold() public view returns (uint256) {
+        return getDecayedRecord() * THRESHOLD_BPS / 10_000;
+    }
+
+    // ============ One-shot test/init seeder ============
+
+    /// @notice Seeds (highestBuyAmount, highestBuyBlock) once so views can be exercised
+    ///         before the first swap. Called by deploy script with (0,0) immediately
+    ///         after deploy to permanently lock the function out.
+    bool internal _seedDone;
+    error AlreadySeeded();
+
+    function seedRecord(uint256 amount, uint256 atBlock) external {
+        if (_seedDone) revert AlreadySeeded();
+        _seedDone = true;
+        highestBuyAmount = amount;
+        highestBuyBlock = atBlock;
+    }
+
     // ============ IHooks implementation (stubs — logic added in later tasks) ============
 
     function beforeInitialize(address, PoolKey calldata, uint160) external pure returns (bytes4) {
