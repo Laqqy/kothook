@@ -55,6 +55,7 @@ contract KingOfTheHillHook is IHooks {
     error TransferFailed();
     error OnlyTreasury();
     error OnlyRouter();
+    error OnlyPoolManager();
 
     // ============ Events ============
     event NewKing(address indexed king, uint256 amount, uint256 blockNumber);
@@ -194,13 +195,69 @@ contract KingOfTheHillHook is IHooks {
     }
 
     function afterSwap(
-        address,
+        address sender,
         PoolKey calldata,
-        IPoolManager.SwapParams calldata,
-        BalanceDelta,
-        bytes calldata
-    ) external pure returns (bytes4, int128) {
+        IPoolManager.SwapParams calldata params,
+        BalanceDelta delta,
+        bytes calldata hookData
+    ) external returns (bytes4, int128) {
+        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
+
+        // Skip game logic during internal forfeit-burn swaps
+        uint256 isInternal;
+        bytes32 burnSlot = INTERNAL_BURN_TSLOT;
+        assembly { isInternal := tload(burnSlot) }
+        if (isInternal != 0) return (IHooks.afterSwap.selector, 0);
+
+        // Only buys (zeroForOne) can crown a new king
+        if (!params.zeroForOne) return (IHooks.afterSwap.selector, 0);
+
+        // Only swaps via our trusted router can change the crown.
+        // Other senders (aggregators, direct PoolManager callers) bypass the game.
+        if (sender != router) return (IHooks.afterSwap.selector, 0);
+        if (hookData.length != 32) return (IHooks.afterSwap.selector, 0);
+        address msgSender = abi.decode(hookData, (address));
+        if (msgSender == address(0)) return (IHooks.afterSwap.selector, 0);
+
+        // For exact-input buys, amount0 is negative (user paid ETH).
+        int128 a0 = delta.amount0();
+        if (a0 >= 0) return (IHooks.afterSwap.selector, 0);
+        uint256 ethSpent = uint256(uint128(-a0));
+
+        if (ethSpent > getThreshold()) {
+            address oldKing = currentKing;
+            if (oldKing != address(0)) {
+                _dethroneFor(oldKing, REASON_OVERTHROWN);
+            }
+            currentKing = msgSender;
+            highestBuyAmount = ethSpent;
+            highestBuyBlock = block.number;
+            dethronedAt[msgSender] = 0;
+            emit NewKing(msgSender, ethSpent, block.number);
+        }
+
         return (IHooks.afterSwap.selector, 0);
+    }
+
+    function _dethroneFor(address oldKing, bytes32 reason) internal {
+        Reign memory data = Reign({
+            king: oldKing,
+            reignId: reignsCount,
+            startBlock: highestBuyBlock,
+            endBlock: block.number,
+            ethEarned: kingBalances[oldKing],
+            recordHigh: highestBuyAmount,
+            dethroneReason: reason
+        });
+        soul.mintReign(oldKing, reignsCount, data);
+        scroll.mintReign(oldKing, reignsCount, data);
+        emit KingDethroned(oldKing, reason, data.ethEarned);
+
+        currentKing = address(0);
+        dethronedAt[oldKing] = block.number;
+        highestBuyAmount = 0;
+        highestBuyBlock = 0;
+        reignsCount += 1;
     }
 
     function beforeDonate(

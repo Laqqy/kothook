@@ -59,4 +59,50 @@ contract KingOfTheHillHookTest is DeployFixture {
         assertGt(kothOut, 0);
         assertGt(koth.balanceOf(alice), 0);
     }
+
+    function test_FirstBuyCrowns() public {
+        address alice = makeAddr("alice");
+        deal(alice, 5 ether);
+        vm.prank(alice);
+        kothRouter.buy{value: 1 ether}(0);
+
+        assertEq(kothHook.currentKing(), alice);
+        assertEq(kothHook.highestBuyAmount(), 1 ether);
+        assertEq(kothHook.highestBuyBlock(), block.number);
+    }
+
+    function test_BuyBelowThresholdDoesNotChangeKing() public {
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        deal(alice, 5 ether);
+        deal(bob, 5 ether);
+
+        vm.prank(alice);
+        kothRouter.buy{value: 2 ether}(0);
+        assertEq(kothHook.currentKing(), alice);
+
+        // Bob's 1 ether is below threshold (2 * 1.03 = 2.06)
+        vm.prank(bob);
+        kothRouter.buy{value: 1 ether}(0);
+        assertEq(kothHook.currentKing(), alice);
+    }
+
+    function test_BuyAboveThresholdReplacesKing() public {
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        deal(alice, 5 ether);
+        deal(bob, 5 ether);
+
+        vm.prank(alice);
+        kothRouter.buy{value: 2 ether}(0);
+
+        vm.prank(bob);
+        kothRouter.buy{value: 2.1 ether}(0);   // > 2 * 1.03 = 2.06
+        assertEq(kothHook.currentKing(), bob);
+        assertEq(kothHook.highestBuyAmount(), 2.1 ether);
+
+        // Alice should have a soul + scroll from being dethroned
+        assertEq(soul.balanceOf(alice), 1);
+        assertEq(scroll.balanceOf(alice), 1);
+    }
 }

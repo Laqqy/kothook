@@ -53,17 +53,9 @@ contract KOTHRouter is IUnlockCallback {
     function buy(uint256 minKothOut) external payable returns (uint256 kothOut) {
         if (msg.value == 0) revert ZeroAmount();
 
-        // Write caller into transient storage so the hook can read it.
-        bytes32 slot = USER_TSLOT;
-        address sender = msg.sender;
-        assembly { tstore(slot, sender) }
-
         bytes memory result = poolManager.unlock(
             abi.encode(SwapKind.Buy, msg.sender, msg.value, minKothOut)
         );
-
-        // Clear transient slot after the unlock returns.
-        assembly { tstore(slot, 0) }
 
         return abi.decode(result, (uint256));
     }
@@ -75,15 +67,9 @@ contract KOTHRouter is IUnlockCallback {
         if (kothIn == 0) revert ZeroAmount();
         koth.transferFrom(msg.sender, address(this), kothIn);
 
-        bytes32 slot = USER_TSLOT;
-        address sender = msg.sender;
-        assembly { tstore(slot, sender) }
-
         bytes memory result = poolManager.unlock(
             abi.encode(SwapKind.Sell, msg.sender, kothIn, minEthOut)
         );
-
-        assembly { tstore(slot, 0) }
 
         return abi.decode(result, (uint256));
     }
@@ -111,7 +97,7 @@ contract KOTHRouter is IUnlockCallback {
                 amountSpecified: -int256(amountIn), // exact-input
                 sqrtPriceLimitX96: limit
             }),
-            ""
+            abi.encode(user)   // hook reads this to identify the EOA
         );
 
         if (kind == SwapKind.Buy) {
