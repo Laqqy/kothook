@@ -50,4 +50,13 @@ contract KingOfTheHillHookTest is DeployFixture {
         assertTrue(kothHook.poolKeySet());
         assertTrue(kothRouter.poolInitialized());
     }
+
+    function test_RouterBuyGoesThroughNoOpHook() public {
+        address alice = makeAddr("alice");
+        deal(alice, 5 ether);
+        vm.prank(alice);
+        uint256 kothOut = kothRouter.buy{value: 1 ether}(0);
+        assertGt(kothOut, 0);
+        assertGt(koth.balanceOf(alice), 0);
+    }
 }

@@ -94,8 +94,19 @@ abstract contract DeployFixture is Test, Deployers {
         // 10. Initialize the v4 pool at sqrtPriceX96 = 1:1
         manager.initialize(pk, Constants.SQRT_PRICE_1_1);
 
-        // 11. Roll past anti-sniper window so most tests don't trip the 1% wallet cap.
+        // 11. Roll past anti-sniper window so liquidity seed and most tests don't trip the cap.
         //     Tests that specifically test anti-sniper deploy a fresh KOTHToken in their own setup.
         vm.roll(block.number + 101);
+
+        // 12. Seed initial liquidity around tick 0 (price 1:1), wide range.
+        koth.approve(address(modifyLiquidityRouter), type(uint256).max);
+        deal(address(this), 1000 ether);
+        IPoolManager.ModifyLiquidityParams memory liqParams = IPoolManager.ModifyLiquidityParams({
+            tickLower: -1200,
+            tickUpper: 1200,
+            liquidityDelta: 1_000e18,
+            salt: 0
+        });
+        modifyLiquidityRouter.modifyLiquidity{value: 100 ether}(pk, liqParams, "");
     }
 }

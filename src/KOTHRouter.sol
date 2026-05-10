@@ -118,8 +118,11 @@ contract KOTHRouter is IUnlockCallback {
             // currency0 = ETH (native): settle with value, take KOTH out
             poolManager.settle{value: amountIn}();
 
-            // amount1 is negative (tokens leaving the pool → coming to us); negate to get positive
-            uint256 kothOut = uint256(uint128(-delta.amount1()));
+            // For exact-input zeroForOne: amount0 < 0 (we owe ETH to manager — already settled),
+            // amount1 > 0 (manager owes us KOTH — we take it).
+            int128 a1 = delta.amount1();
+            require(a1 > 0, "neg out");
+            uint256 kothOut = uint256(uint128(a1));
             if (kothOut < minOut) revert InsufficientOutput();
             poolManager.take(poolKey.currency1, user, kothOut);
             return abi.encode(kothOut);
@@ -129,8 +132,11 @@ contract KOTHRouter is IUnlockCallback {
             koth.transfer(address(poolManager), amountIn);
             poolManager.settle();
 
-            // amount0 is negative (ETH leaving the pool → coming to us); negate
-            uint256 ethOut = uint256(uint128(-delta.amount0()));
+            // For exact-input oneForZero: amount1 < 0 (we owe KOTH — already paid),
+            // amount0 > 0 (manager owes us ETH — we take it).
+            int128 a0 = delta.amount0();
+            require(a0 > 0, "neg out");
+            uint256 ethOut = uint256(uint128(a0));
             if (ethOut < minOut) revert InsufficientOutput();
             poolManager.take(poolKey.currency0, user, ethOut);
             return abi.encode(ethOut);
