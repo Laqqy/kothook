@@ -6,8 +6,31 @@ import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC2
 
 contract KOTHToken is ERC20, ERC20Burnable {
     uint256 public constant TOTAL_SUPPLY = 10_000_000 ether;
+    uint256 public constant SNIPER_BLOCKS = 100;
+    uint256 public constant MAX_WALLET_BPS = 100;       // 1%
+    uint256 public immutable LAUNCH_BLOCK;
 
-    constructor(address[] memory /* exemptions */) ERC20("King of the Hill", "KOTH") {
+    mapping(address => bool) public isExempt;
+
+    error AntiSniperLimit(uint256 wouldHave, uint256 maxAllowed);
+
+    constructor(address[] memory exemptions) ERC20("King of the Hill", "KOTH") {
+        LAUNCH_BLOCK = block.number;
+        isExempt[msg.sender] = true;
+        for (uint256 i; i < exemptions.length; ++i) isExempt[exemptions[i]] = true;
         _mint(msg.sender, TOTAL_SUPPLY);
+    }
+
+    function _update(address from, address to, uint256 value) internal override {
+        if (
+            block.number < LAUNCH_BLOCK + SNIPER_BLOCKS
+            && to != address(0)
+            && !isExempt[to]
+        ) {
+            uint256 wouldHave = balanceOf(to) + value;
+            uint256 maxAllowed = (TOTAL_SUPPLY * MAX_WALLET_BPS) / 10_000;
+            if (wouldHave > maxAllowed) revert AntiSniperLimit(wouldHave, maxAllowed);
+        }
+        super._update(from, to, value);
     }
 }

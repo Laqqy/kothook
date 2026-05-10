@@ -20,4 +20,22 @@ contract KOTHTokenTest is Test {
         assertEq(token.symbol(), "KOTH");
         assertEq(token.decimals(), 18);
     }
+
+    function test_AntiSniperBlocksLargeTransfer() public {
+        address victim = makeAddr("victim");
+        uint256 maxAllowed = (10_000_000 ether * 100) / 10_000;   // 100_000 ether
+        uint256 oneOver = maxAllowed + 1;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(KOTHToken.AntiSniperLimit.selector, oneOver, maxAllowed)
+        );
+        token.transfer(victim, oneOver);
+    }
+
+    function test_AntiSniperAllowsAtLimit() public {
+        address victim = makeAddr("victim");
+        uint256 maxAllowed = (10_000_000 ether * 100) / 10_000;
+        token.transfer(victim, maxAllowed);
+        assertEq(token.balanceOf(victim), maxAllowed);
+    }
 }
