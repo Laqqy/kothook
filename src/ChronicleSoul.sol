@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Reign} from "./Types.sol";
+import {ChronicleRenderer} from "./ChronicleRenderer.sol";
 
 contract ChronicleSoul is ERC721 {
     address public immutable hook;
@@ -32,4 +33,9 @@ contract ChronicleSoul is ERC721 {
 
     function approve(address, uint256) public pure override { revert Soulbound(); }
     function setApprovalForAll(address, bool) public pure override { revert Soulbound(); }
+
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        _requireOwned(tokenId);
+        return ChronicleRenderer.render(reigns[tokenId], "Soul");
+    }
 }

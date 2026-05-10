@@ -46,4 +46,14 @@ contract ChronicleScrollTest is Test {
         vm.expectRevert(ChronicleScroll.OnlyHook.selector);
         scroll.mintReign(king, 0, _r());
     }
+
+    function test_TokenURIDecodesToJson() public {
+        vm.prank(hook);
+        scroll.mintReign(king, 0, _r());
+        string memory uri = scroll.tokenURI(0);
+        bytes memory uriB = bytes(uri);
+        bytes memory prefix = bytes("data:application/json;base64,");
+        assertGt(uriB.length, prefix.length);
+        for (uint i; i < prefix.length; ++i) assertEq(uriB[i], prefix[i]);
+    }
 }

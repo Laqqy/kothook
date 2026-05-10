@@ -70,4 +70,14 @@ contract ChronicleSoulTest is Test {
         vm.expectRevert(ChronicleSoul.Soulbound.selector);
         soul.setApprovalForAll(address(0xBEEF), true);
     }
+
+    function test_TokenURIDecodesToJson() public {
+        vm.prank(hook);
+        soul.mintReign(king, 0, _reign(0));
+        string memory uri = soul.tokenURI(0);
+        bytes memory uriB = bytes(uri);
+        bytes memory prefix = bytes("data:application/json;base64,");
+        assertGt(uriB.length, prefix.length);
+        for (uint i; i < prefix.length; ++i) assertEq(uriB[i], prefix[i]);
+    }
 }
