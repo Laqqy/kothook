@@ -3,3 +3,7 @@ cache/
 broadcast/
 .env
 deployments/
+
+# Playwright MCP outputs
+.playwright-mcp/
+/koth-*.png

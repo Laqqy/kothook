@@ -1,46 +1,77 @@
-'use client';
-
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import Link from 'next/link';
+import { Header } from './_components/header';
+import { Hero } from './_components/hero';
+import { StatCards } from './_components/stat-cards';
+import { SwapWidget } from './_components/swap-widget';
+import { Protocol } from './_components/protocol';
+import { Marquee } from './_components/marquee';
+import { HairlineDivider, Asterism } from './_components/ornaments';
 
 export default function Home() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center px-6 py-16 gap-12 text-center">
-      <header className="absolute top-0 right-0 p-6">
-        <ConnectButton />
-      </header>
+    <div className="relative grain min-h-screen flex flex-col">
+      <Header />
 
-      <div className="max-w-2xl space-y-6">
-        <p className="text-amber-400 font-mono uppercase tracking-widest text-sm">
-          King of the Hill · $KOTH
-        </p>
-        <h1 className="text-5xl md:text-6xl font-semibold leading-tight">
-          A throne that pays you 2% of every swap.
-        </h1>
-        <p className="text-zinc-400 text-lg leading-relaxed">
-          Buy $KOTH above the decayed record to crown yourself. Earn ETH on every
-          subsequent swap until someone pays more — or until you sell.
-        </p>
-      </div>
+      <main className="relative z-10 flex-1">
+        {/* Hero band: throne on the left, swap ledger on the right */}
+        <div className="mx-auto max-w-7xl px-6 pt-12 pb-16">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
+            <div className="lg:col-span-7">
+              <Hero />
+            </div>
+            <div className="lg:col-span-5 lg:sticky lg:top-8 lg:self-start">
+              <SwapWidget />
+            </div>
+          </div>
+        </div>
 
-      <div className="flex flex-wrap gap-3 justify-center">
-        <Link
-          href="/throne-room"
-          className="rounded-md bg-amber-500 text-zinc-950 font-semibold px-5 py-3 hover:bg-amber-400 transition-colors"
-        >
-          Enter the Throne Room
-        </Link>
-        <a
-          href="https://github.com/anthropics/claude-code/issues"
-          className="rounded-md border border-zinc-700 px-5 py-3 hover:border-amber-400 transition-colors"
-        >
-          Read the rules
-        </a>
-      </div>
+        {/* Divider before stats */}
+        <div className="mx-auto max-w-7xl px-6">
+          <HairlineDivider
+            ornament={
+              <div className="flex items-center gap-3 text-bronze-bright">
+                <Asterism className="w-3 h-3" />
+                <span className="font-mono text-[10px] uppercase tracking-[0.35em]">
+                  State of the Realm
+                </span>
+                <Asterism className="w-3 h-3" />
+              </div>
+            }
+          />
+        </div>
 
-      <p className="text-xs text-zinc-500 font-mono">
-        Phase 1 scaffolding · v4 hook deployed on local Anvil
-      </p>
-    </main>
+        {/* Stat cards */}
+        <div className="mx-auto max-w-7xl px-6 py-12">
+          <StatCards />
+        </div>
+
+        {/* Protocol of Succession */}
+        <div className="mx-auto max-w-7xl px-6 pb-16">
+          <Protocol />
+        </div>
+
+        {/* Marquee */}
+        <Marquee />
+
+        {/* Footnote */}
+        <footer className="mx-auto max-w-7xl px-6 py-10 flex flex-col md:flex-row gap-4 justify-between items-center text-stone-soft">
+          <div className="font-mono text-[10px] uppercase tracking-[0.3em]">
+            $KOTH · A Uniswap V4 Hook Experiment
+          </div>
+          <div className="flex items-center gap-5 font-mono text-[10px] uppercase tracking-[0.3em]">
+            <a href="https://github.com" className="hover:text-gold transition-colors">
+              Github
+            </a>
+            <span className="text-bronze">·</span>
+            <a href="#" className="hover:text-gold transition-colors">
+              Whitepaper
+            </a>
+            <span className="text-bronze">·</span>
+            <a href="#" className="hover:text-gold transition-colors">
+              Discord
+            </a>
+          </div>
+        </footer>
+      </main>
+    </div>
   );
 }
