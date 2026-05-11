@@ -288,7 +288,7 @@ contract KingOfTheHillHookTest is DeployFixture {
         kothHook.forfeit(alice);
 
         // Keeper got tip
-        uint256 expectedTip = aliceBalance * 50 / 10_000;
+        uint256 expectedTip = aliceBalance * kothHook.KEEPER_TIP_BPS() / 10_000;
         assertEq(keeper.balance - keeperBalPre, expectedTip);
 
         // Balance zeroed

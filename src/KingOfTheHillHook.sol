@@ -24,8 +24,8 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     uint256 public constant KING_FEE_BPS    = 200;     // 2%
     uint256 public constant BURN_FEE_BPS    = 100;     // 1%
     uint256 public constant THRESHOLD_BPS   = 10300;   // 1.03×
-    uint256 public constant FORFEIT_BLOCKS  = 7200;
-    uint256 public constant KEEPER_TIP_BPS  = 50;      // 0.5%
+    uint256 public constant FORFEIT_BLOCKS  = 3600;    // ~12h at 12s/block
+    uint256 public constant KEEPER_TIP_BPS  = 300;     // 3%
 
     bytes32 internal constant USER_TSLOT          = keccak256("koth.user");
     bytes32 internal constant INTERNAL_BURN_TSLOT = keccak256("koth.internalBurn");
