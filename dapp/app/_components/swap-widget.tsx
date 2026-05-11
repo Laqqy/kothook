@@ -1,39 +1,66 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { mockKing, mockPricing } from './mock-data';
-import { formatDecimal, formatInt } from './format';
+import { parseEther } from 'viem';
+import { useAccount } from 'wagmi';
+import { useKing } from '@/hooks/use-king';
+import { useUser } from '@/hooks/use-user';
+import { mockPricing } from './mock-data';
+import { formatDecimal, formatWeiETH, formatWeiKOTH } from './format';
 import { Crown, HairlineDivider, Asterism } from './ornaments';
 
 type Mode = 'acquire' | 'abdicate';
+
+// TODO(task #X): replace with a quote derived from PoolManager.slot0 via
+// StateLibrary once a real pool is initialised. For now this is a
+// constant-rate estimate good enough for UI flow.
+const KOTH_PER_ETH = mockPricing.kothPerEth;
+const ETH_PER_KOTH = 1 / KOTH_PER_ETH;
 
 export function SwapWidget() {
   const [mode, setMode] = useState<Mode>('acquire');
   const [amount, setAmount] = useState('');
 
+  const { isConnected } = useAccount();
+  const king = useKing();
+  const user = useUser();
+
   const numericAmount = Number(amount) || 0;
+  const inputWei = useMemo(() => {
+    if (!amount || numericAmount <= 0) return 0n;
+    try {
+      return parseEther(amount as `${number}`);
+    } catch {
+      return 0n;
+    }
+  }, [amount, numericAmount]);
 
   const receive = useMemo(() => {
-    if (mode === 'acquire') return numericAmount * mockPricing.kothPerEth;
-    return numericAmount * mockPricing.ethPerKoth;
+    if (mode === 'acquire') return numericAmount * KOTH_PER_ETH;
+    return numericAmount * ETH_PER_KOTH;
   }, [mode, numericAmount]);
 
   const willCrown =
-    mode === 'acquire' && numericAmount >= mockKing.thresholdETH;
+    mode === 'acquire' &&
+    inputWei > 0n &&
+    inputWei > king.thresholdWei;
 
-  const insufficientFunds =
-    mode === 'acquire'
-      ? numericAmount > mockPricing.userEthBalance
-      : numericAmount > mockPricing.userKothBalance;
+  const userBalanceWei =
+    mode === 'acquire' ? user.ethBalanceWei : user.kothBalanceWei;
+
+  const insufficientFunds = inputWei > userBalanceWei;
 
   const buttonLabel = useMemo(() => {
+    if (!isConnected) return 'Connect a wallet';
     if (numericAmount <= 0) return mode === 'acquire' ? 'Lay tribute' : 'Surrender holdings';
     if (insufficientFunds) return 'Treasury too lean';
     if (mode === 'acquire') {
       return willCrown ? 'Ascend the throne' : 'Tribute paid · no crown';
     }
     return 'Abdicate & sell';
-  }, [mode, numericAmount, insufficientFunds, willCrown]);
+  }, [isConnected, mode, numericAmount, insufficientFunds, willCrown]);
+
+  const buttonDisabled = !isConnected || numericAmount <= 0 || insufficientFunds;
 
   return (
     <aside
@@ -59,13 +86,19 @@ export function SwapWidget() {
         <div className="grid grid-cols-2 mt-4 border border-bronze rounded-sm overflow-hidden">
           <TabButton
             active={mode === 'acquire'}
-            onClick={() => setMode('acquire')}
+            onClick={() => {
+              setMode('acquire');
+              setAmount('');
+            }}
           >
             Acquire
           </TabButton>
           <TabButton
             active={mode === 'abdicate'}
-            onClick={() => setMode('abdicate')}
+            onClick={() => {
+              setMode('abdicate');
+              setAmount('');
+            }}
           >
             Abdicate
           </TabButton>
@@ -77,18 +110,18 @@ export function SwapWidget() {
         <Field
           label={mode === 'acquire' ? 'Tribute' : 'Renounce'}
           unit={mode === 'acquire' ? 'ETH' : 'KOTH'}
-          balance={
+          balanceDisplay={
             mode === 'acquire'
-              ? mockPricing.userEthBalance.toFixed(4)
-              : formatInt(mockPricing.userKothBalance)
+              ? formatWeiETH(user.ethBalanceWei, 4)
+              : formatWeiKOTH(user.kothBalanceWei, 2)
           }
           value={amount}
           onChange={setAmount}
           onMax={() =>
             setAmount(
               mode === 'acquire'
-                ? mockPricing.userEthBalance.toString()
-                : mockPricing.userKothBalance.toString(),
+                ? formatWeiETH(user.ethBalanceWei, 18)
+                : formatWeiKOTH(user.kothBalanceWei, 18),
             )
           }
         />
@@ -105,7 +138,7 @@ export function SwapWidget() {
           label="Receive"
           unit={mode === 'acquire' ? 'KOTH' : 'ETH'}
           value={receive}
-          subtle={`Rate · 1 Ξ ≈ ${formatDecimal(mockPricing.kothPerEth, { maximumFractionDigits: 2 })} KOTH`}
+          subtle={`Rate · 1 Ξ ≈ ${formatDecimal(KOTH_PER_ETH, { maximumFractionDigits: 2 })} KOTH (placeholder)`}
         />
 
         {/* Threshold strip */}
@@ -122,7 +155,7 @@ export function SwapWidget() {
               </span>
             </div>
             <div className="font-mono text-sm text-parchment tnum">
-              {mockKing.thresholdETH.toFixed(3)} Ξ
+              {formatWeiETH(king.thresholdWei, 3)} Ξ
             </div>
           </div>
           <div
@@ -145,7 +178,7 @@ export function SwapWidget() {
         {/* Action */}
         <button
           type="button"
-          disabled={numericAmount <= 0 || insufficientFunds}
+          disabled={buttonDisabled}
           className={`mt-5 w-full font-display text-lg tracking-wide uppercase py-3.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed ${
             willCrown
               ? 'bg-gold text-ink hover:bg-flame border border-gold-soft shadow-[0_0_0_1px_rgba(245,165,36,0.4),0_0_24px_rgba(245,165,36,0.35)]'
@@ -177,6 +210,25 @@ export function SwapWidget() {
             <span className="text-parchment-soft tnum">0.50%</span>
           </li>
         </ul>
+
+        {user.pullBalanceWei > 0n && (
+          <div className="mt-5 engraved-inset rounded-sm px-4 py-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold-soft">
+                Unclaimed Tribute
+              </div>
+              <div className="font-display text-xl tnum text-parchment mt-1">
+                {formatWeiETH(user.pullBalanceWei, 4)} Ξ
+              </div>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 font-mono text-[11px] uppercase tracking-[0.2em] px-3 py-2 bg-gold text-ink hover:bg-flame rounded-sm"
+            >
+              Claim
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -215,14 +267,14 @@ function TabButton({
 function Field({
   label,
   unit,
-  balance,
+  balanceDisplay,
   value,
   onChange,
   onMax,
 }: {
   label: string;
   unit: string;
-  balance: string;
+  balanceDisplay: string;
   value: string;
   onChange: (v: string) => void;
   onMax: () => void;
@@ -238,7 +290,7 @@ function Field({
           onClick={onMax}
           className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone hover:text-gold transition-colors"
         >
-          Bal · {balance} <span className="text-gold-soft">MAX</span>
+          Bal · {balanceDisplay} <span className="text-gold-soft">MAX</span>
         </button>
       </div>
       <div className="flex items-baseline gap-3">
@@ -246,9 +298,7 @@ function Field({
           inputMode="decimal"
           placeholder="0.0"
           value={value}
-          onChange={(e) =>
-            onChange(e.target.value.replace(/[^0-9.]/g, ''))
-          }
+          onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
           className="flex-1 bg-transparent font-display text-3xl tnum text-parchment placeholder-stone-soft outline-none"
         />
         <span className="font-mono text-sm text-bronze-bright tracking-widest">
