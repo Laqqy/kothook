@@ -14,3 +14,11 @@ ffi = false
 [fmt]
 line_length = 120
 tab_width = 4
+
+[lint]
+# Casts in src/KingOfTheHillHook.sol and src/KOTHRouter.sol are safe by
+# construction: pool delta amounts are returned as int128 by v4-core; fees are
+# fractions thereof so they always fit. Solidity 0.8+ also checks lossy casts
+# from uint256 → intN, so any overflow would revert. We silence the linter at
+# the project level rather than peppering each line with disable comments.
+exclude_lints = ["unsafe-typecast"]

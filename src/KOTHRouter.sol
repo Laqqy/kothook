@@ -65,7 +65,10 @@ contract KOTHRouter is IUnlockCallback {
     /// @param minEthOut Minimum ETH the caller is willing to receive.
     function sell(uint256 kothIn, uint256 minEthOut) external returns (uint256 ethOut) {
         if (kothIn == 0) revert ZeroAmount();
-        koth.transferFrom(msg.sender, address(this), kothIn);
+        // KOTHToken is solmate's ERC20 which reverts on failure rather than
+        // returning false, so the bool result is always true. require() makes
+        // the success-vs-revert behavior explicit and silences the linter.
+        require(koth.transferFrom(msg.sender, address(this), kothIn), "transferFrom failed");
 
         bytes memory result = poolManager.unlock(
             abi.encode(SwapKind.Sell, msg.sender, kothIn, minEthOut)
@@ -115,7 +118,7 @@ contract KOTHRouter is IUnlockCallback {
         } else {
             // currency1 = KOTH (ERC-20): sync then transfer tokens in, take ETH out
             poolManager.sync(poolKey.currency1);
-            koth.transfer(address(poolManager), amountIn);
+            require(koth.transfer(address(poolManager), amountIn), "transfer failed");
             poolManager.settle();
 
             // For exact-input oneForZero: amount1 < 0 (we owe KOTH — already paid),
