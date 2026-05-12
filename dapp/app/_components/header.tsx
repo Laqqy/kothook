@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useBlockNumber } from 'wagmi';
 import { useIsDeployed } from '@/hooks/use-contracts';
 import { useKing } from '@/hooks/use-king';
+import { useHasMounted } from '@/hooks/use-has-mounted';
 import { formatInt } from './format';
 import { Crown } from './ornaments';
 
 export function Header() {
+  const hasMounted = useHasMounted();
   const isDeployed = useIsDeployed();
   const blockQ = useBlockNumber({
     watch: { enabled: isDeployed, pollingInterval: 12_000 },
@@ -16,8 +18,14 @@ export function Header() {
   });
   const king = useKing();
 
-  // Live block when reading on-chain, otherwise mock value from useKing fallback.
-  const displayBlock = isDeployed ? blockQ.data : king.blockNumber;
+  // Resolved on the client only — both SSR and the first client render show "—"
+  // so React doesn't trip on a hydration mismatch when the wallet connects to
+  // a chain different from the SSR default.
+  const displayBlock = hasMounted
+    ? isDeployed
+      ? blockQ.data
+      : king.blockNumber
+    : undefined;
 
   return (
     <header className="relative z-20 border-b border-bronze/60 bg-ink/80 backdrop-blur-sm">

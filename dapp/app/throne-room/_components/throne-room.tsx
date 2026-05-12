@@ -9,6 +9,7 @@ import {
   useThroneRoom,
   type DethronedEntry,
 } from '@/hooks/use-throne-room';
+import { useHasMounted } from '@/hooks/use-has-mounted';
 import {
   formatInt,
   formatWeiETH,
@@ -22,6 +23,7 @@ import {
 } from '@/app/_components/ornaments';
 
 export function ThroneRoom() {
+  const hasMounted = useHasMounted();
   const room = useThroneRoom();
   const eligibleCount = room.entries.filter((e) => e.isForfeitable).length;
   const totalLocked = room.entries.reduce(
@@ -35,8 +37,10 @@ export function ThroneRoom() {
       <div className="reveal flex items-center gap-3 text-bronze-bright text-[11px] font-mono uppercase tracking-[0.35em]">
         <span>Forfeit Writ</span>
         <span className="text-bronze">·</span>
-        <span className="tnum text-stone">Block {formatInt(room.blockNumber)}</span>
-        {room.isDemo && (
+        <span className="tnum text-stone">
+          Block {hasMounted ? formatInt(room.blockNumber) : '—'}
+        </span>
+        {hasMounted && room.isDemo && (
           <span className="ml-auto text-[10px] uppercase tracking-[0.3em] text-crimson border border-crimson/40 px-2 py-0.5 rounded-sm">
             Demo
           </span>

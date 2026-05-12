@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useKing } from '@/hooks/use-king';
+import { useHasMounted } from '@/hooks/use-has-mounted';
 import {
   formatInt,
   formatWeiETH,
@@ -29,6 +30,7 @@ function formatTime(totalSecs: number) {
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
 
 export function Hero() {
+  const hasMounted = useHasMounted();
   const king = useKing();
   const [secsLeft, setSecsLeft] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -93,9 +95,9 @@ export function Hero() {
           <span className="text-gold">№ {decreeNumeral || 'O'}</span>
           <span className="text-bronze">·</span>
           <span className="tnum text-stone">
-            Block {formatInt(king.blockNumber)}
+            Block {hasMounted ? formatInt(king.blockNumber) : '—'}
           </span>
-          {king.isDemo && (
+          {hasMounted && king.isDemo && (
             <span
               className="ml-auto text-[10px] uppercase tracking-[0.3em] text-crimson border border-crimson/40 px-2 py-0.5 rounded-sm"
               title="No contract addresses configured. Showing sample data — set NEXT_PUBLIC_LOCAL_KOTH / NEXT_PUBLIC_LOCAL_HOOK in dapp/.env.local to read on-chain state."
