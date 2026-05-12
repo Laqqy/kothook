@@ -1,4 +1,5 @@
 import type { Address } from 'viem';
+import { zeroAddress } from 'viem';
 import { anvil, mainnet } from './chains';
 
 type ContractName =
@@ -11,29 +12,36 @@ type ContractName =
 
 type AddressMap = Record<ContractName, Address>;
 
-const env = (k: string): Address | undefined => {
-  const v = process.env[k];
-  if (!v) return undefined;
-  if (!/^0x[a-fA-F0-9]{40}$/.test(v)) return undefined;
+/**
+ * Next.js inlines `process.env.NEXT_PUBLIC_*` at build time only when the key
+ * is written as a *literal* property access. Reading via `process.env[k]`
+ * with a variable doesn't get rewritten and returns `undefined` on the
+ * client. Every entry below therefore reads its env var verbatim.
+ */
+function addr(v: string | undefined, fallback: Address = zeroAddress): Address {
+  if (!v) return fallback;
+  if (!/^0x[a-fA-F0-9]{40}$/.test(v)) return fallback;
   return v as Address;
-};
+}
+
+const HOOK_FALLBACK = '0x11000000000000000000000000000000000000CC' as Address;
 
 const local: AddressMap = {
-  koth: env('NEXT_PUBLIC_LOCAL_KOTH') ?? '0x0000000000000000000000000000000000000000',
-  hook: env('NEXT_PUBLIC_LOCAL_HOOK') ?? '0x11000000000000000000000000000000000000CC',
-  kothRouter: env('NEXT_PUBLIC_LOCAL_ROUTER') ?? '0x0000000000000000000000000000000000000000',
-  chronicleSoul: env('NEXT_PUBLIC_LOCAL_SOUL') ?? '0x0000000000000000000000000000000000000000',
-  chronicleScroll: env('NEXT_PUBLIC_LOCAL_SCROLL') ?? '0x0000000000000000000000000000000000000000',
-  poolManager: env('NEXT_PUBLIC_LOCAL_POOL_MANAGER') ?? '0x0000000000000000000000000000000000000000',
+  koth: addr(process.env.NEXT_PUBLIC_LOCAL_KOTH),
+  hook: addr(process.env.NEXT_PUBLIC_LOCAL_HOOK, HOOK_FALLBACK),
+  kothRouter: addr(process.env.NEXT_PUBLIC_LOCAL_ROUTER),
+  chronicleSoul: addr(process.env.NEXT_PUBLIC_LOCAL_SOUL),
+  chronicleScroll: addr(process.env.NEXT_PUBLIC_LOCAL_SCROLL),
+  poolManager: addr(process.env.NEXT_PUBLIC_LOCAL_POOL_MANAGER),
 };
 
 const mainnetAddrs: AddressMap = {
-  koth: env('NEXT_PUBLIC_MAINNET_KOTH') ?? '0x0000000000000000000000000000000000000000',
-  hook: env('NEXT_PUBLIC_MAINNET_HOOK') ?? '0x0000000000000000000000000000000000000000',
-  kothRouter: env('NEXT_PUBLIC_MAINNET_ROUTER') ?? '0x0000000000000000000000000000000000000000',
-  chronicleSoul: env('NEXT_PUBLIC_MAINNET_SOUL') ?? '0x0000000000000000000000000000000000000000',
-  chronicleScroll: env('NEXT_PUBLIC_MAINNET_SCROLL') ?? '0x0000000000000000000000000000000000000000',
-  poolManager: env('NEXT_PUBLIC_MAINNET_POOL_MANAGER') ?? '0x0000000000000000000000000000000000000000',
+  koth: addr(process.env.NEXT_PUBLIC_MAINNET_KOTH),
+  hook: addr(process.env.NEXT_PUBLIC_MAINNET_HOOK),
+  kothRouter: addr(process.env.NEXT_PUBLIC_MAINNET_ROUTER),
+  chronicleSoul: addr(process.env.NEXT_PUBLIC_MAINNET_SOUL),
+  chronicleScroll: addr(process.env.NEXT_PUBLIC_MAINNET_SCROLL),
+  poolManager: addr(process.env.NEXT_PUBLIC_MAINNET_POOL_MANAGER),
 };
 
 export function contractsFor(chainId: number): AddressMap {
