@@ -84,7 +84,7 @@ contract SimulateBattle is DeployFixture {
         vm.roll(b0 + 2101 + kothHook.FORFEIT_BLOCKS() + 1);
         uint256 supplyPre = koth.totalSupply();
         vm.prank(keeper);
-        kothHook.forfeit(charlie);
+        kothHook.forfeit(charlie, 0);
         require(koth.totalSupply() < supplyPre, "supply should decrease");
         emit log_named_uint("Forfeit burned KOTH", supplyPre - koth.totalSupply());
     }

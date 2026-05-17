@@ -77,7 +77,8 @@ contract DeployLocal is Script {
             soul,
             scroll,
             treasury,
-            address(kothRouter)
+            address(kothRouter),
+            deployer
         );
 
         vm.stopBroadcast();

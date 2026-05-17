@@ -64,7 +64,8 @@ abstract contract DeployFixture is Test, Deployers {
             soul,
             scroll,
             treasury,
-            address(kothRouter)
+            address(kothRouter),
+            address(this)   // admin
         );
         vm.etch(HOOK_ADDR, address(impl).code);
 

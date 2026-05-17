@@ -5,6 +5,7 @@ import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
@@ -12,6 +13,7 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
 
 import {KOTHToken} from "./KOTHToken.sol";
 import {ChronicleSoul} from "./ChronicleSoul.sol";
@@ -19,6 +21,9 @@ import {ChronicleScroll} from "./ChronicleScroll.sol";
 import {Reign, REASON_OVERTHROWN, REASON_DUMP, REASON_FORFEIT} from "./Types.sol";
 
 contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
+    using StateLibrary for IPoolManager;
+    using PoolIdLibrary for PoolKey;
+
     // ============ Constants ============
     uint256 public constant DECAY_BLOCKS    = 3600;
     uint256 public constant KING_FEE_BPS    = 200;     // 2%
@@ -26,8 +31,10 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     uint256 public constant THRESHOLD_BPS   = 10300;   // 1.03×
     uint256 public constant FORFEIT_BLOCKS  = 3600;    // ~12h at 12s/block
     uint256 public constant KEEPER_TIP_BPS  = 300;     // 3%
+    uint256 public constant MIN_FORFEIT_AMOUNT = 0.001 ether;
+    /// @dev Max in-swap deviation for the forfeit buyback (50 bps on sqrtPrice ≈ 1% on price).
+    uint256 public constant FORFEIT_SLIP_BPS = 50;
 
-    bytes32 internal constant USER_TSLOT          = keccak256("koth.user");
     bytes32 internal constant INTERNAL_BURN_TSLOT = keccak256("koth.internalBurn");
 
     // ============ Immutables ============
@@ -37,6 +44,7 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     ChronicleScroll public immutable scroll;
     address        public immutable treasury;
     address        public immutable router;
+    address        public immutable admin;
 
     // ============ State ============
     PoolKey     public poolKey;
@@ -61,6 +69,9 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     error OnlyTreasury();
     error OnlyRouter();
     error OnlyPoolManager();
+    error OnlyAdmin();
+    error InvalidPoolKey();
+    error SlippageExceeded();
 
     // ============ Events ============
     event NewKing(address indexed king, uint256 amount, uint256 blockNumber);
@@ -75,7 +86,8 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
         ChronicleSoul _soul,
         ChronicleScroll _scroll,
         address _treasury,
-        address _router
+        address _router,
+        address _admin
     ) {
         poolManager = _manager;
         koth = _koth;
@@ -83,6 +95,7 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
         scroll = _scroll;
         treasury = _treasury;
         router = _router;
+        admin = _admin;
     }
 
     function getHookPermissions() public pure returns (Hooks.Permissions memory) {
@@ -105,7 +118,11 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     }
 
     function initializePoolKey(PoolKey calldata key) external {
+        if (msg.sender != admin) revert OnlyAdmin();
         if (poolKeySet) revert PoolKeyAlreadySet();
+        if (Currency.unwrap(key.currency0) != address(0)) revert InvalidPoolKey();
+        if (Currency.unwrap(key.currency1) != address(koth)) revert InvalidPoolKey();
+        if (address(key.hooks) != address(this)) revert InvalidPoolKey();
         poolKey = key;
         poolKeySet = true;
     }
@@ -125,15 +142,18 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
         return getDecayedRecord() * THRESHOLD_BPS / 10_000;
     }
 
-    // ============ One-shot test/init seeder ============
+    // ============ One-shot init seeder ============
 
-    /// @notice Seeds (highestBuyAmount, highestBuyBlock) once so views can be exercised
-    ///         before the first swap. Called by deploy script with (0,0) immediately
-    ///         after deploy to permanently lock the function out.
+    /// @notice Seeds (highestBuyAmount, highestBuyBlock) for testing/init purposes.
+    ///         Admin-only and one-shot. Deploy script calls this with (0,0) immediately
+    ///         after deploy to permanently lock it out; defaults are already zero so
+    ///         this just flips _seedDone. Front-runs were possible in the prior version;
+    ///         the admin gate now blocks them.
     bool internal _seedDone;
     error AlreadySeeded();
 
     function seedRecord(uint256 amount, uint256 atBlock) external {
+        if (msg.sender != admin) revert OnlyAdmin();
         if (_seedDone) revert AlreadySeeded();
         _seedDone = true;
         highestBuyAmount = amount;
@@ -287,7 +307,13 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
 
     // ============ Forfeit ============
 
-    function forfeit(address staleKing) external nonReentrant {
+    /// @notice Reclaim a stale king's coffer: 3% keeper tip, 97% buyback-and-burn.
+    /// @param staleKing The dethroned king whose 12h reclaim window has passed.
+    /// @param minKothOut Min KOTH the keeper expects the buyback to receive. 0 disables.
+    ///        On top of this, an in-swap sqrtPriceLimit caps single-tx price impact
+    ///        (FORFEIT_SLIP_BPS); unused ETH (if the cap clamped the swap) is credited
+    ///        to treasury so accounting stays consistent.
+    function forfeit(address staleKing, uint256 minKothOut) external nonReentrant {
         uint256 dethronedAtBlock = dethronedAt[staleKing];
         if (dethronedAtBlock == 0) revert NotDethroned();
         if (block.number <= dethronedAtBlock + FORFEIT_BLOCKS) revert TooEarly();
@@ -298,49 +324,81 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
         kingBalances[staleKing] = 0;
         dethronedAt[staleKing] = 0;
 
+        // Dust path: amounts too small for a meaningful buyback go entirely to the keeper.
+        // This prevents 1-wei coffers from getting stuck (the swap would round to 0 KOTH out).
+        if (amount < MIN_FORFEIT_AMOUNT) {
+            (bool okDust,) = msg.sender.call{value: amount}("");
+            if (!okDust) revert TransferFailed();
+            emit Forfeited(staleKing, amount, amount, 0);
+            return;
+        }
+
         uint256 tip = amount * KEEPER_TIP_BPS / 10_000;
         uint256 toBurn = amount - tip;
+
+        // Buyback FIRST, then pay the keeper. Paying the tip before the buyback would
+        // let a malicious keeper run arbitrary code in their `receive()` — including a
+        // fresh `poolManager.unlock()` cycle that shifts the price — and our buyback
+        // would then read the manipulated `sqrtPriceX96` and execute at a worse rate.
+        // By paying last we close the intra-tx sandwich window. Pre-tx mempool sandwich
+        // is still bounded by FORFEIT_SLIP_BPS + the keeper-supplied minKothOut.
+        bytes32 burnSlot = INTERNAL_BURN_TSLOT;
+        assembly { tstore(burnSlot, 1) }
+        (uint256 kothBought, uint256 ethSpent) = abi.decode(
+            poolManager.unlock(abi.encode(toBurn, minKothOut)),
+            (uint256, uint256)
+        );
+        assembly { tstore(burnSlot, 0) }
+
+        if (kothBought > 0) koth.burnFromHook(kothBought);
+
+        // If the sqrtPriceLimit clamped the swap, the remainder is owed back to the
+        // protocol. Sweep it to treasury so address(this).balance stays accounted-for.
+        if (ethSpent < toBurn) {
+            treasuryBalance += (toBurn - ethSpent);
+        }
 
         (bool ok,) = msg.sender.call{value: tip}("");
         if (!ok) revert TransferFailed();
 
-        // Internal swap ETH → KOTH bypassing king mechanics
-        bytes32 burnSlot = INTERNAL_BURN_TSLOT;
-        assembly { tstore(burnSlot, 1) }
-        uint256 kothBought = abi.decode(
-            poolManager.unlock(abi.encode(toBurn)),
-            (uint256)
-        );
-        assembly { tstore(burnSlot, 0) }
-
-        koth.burnFromHook(kothBought);
         emit Forfeited(staleKing, amount, tip, kothBought);
     }
 
     function unlockCallback(bytes calldata raw) external returns (bytes memory) {
         if (msg.sender != address(poolManager)) revert OnlyPoolManager();
-        uint256 ethAmount = abi.decode(raw, (uint256));
+        (uint256 ethAmount, uint256 minKothOut) = abi.decode(raw, (uint256, uint256));
+
+        // Cap in-swap price movement to ~1% (FORFEIT_SLIP_BPS on sqrtPrice).
+        // If a keeper sandwich pre-moved the price, this still bounds the *additional*
+        // damage during the buyback; unused ETH is returned via partial fill.
+        (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolKey.toId());
+        uint160 limit = uint160(uint256(sqrtPriceX96) * (10_000 - FORFEIT_SLIP_BPS) / 10_000);
+        if (limit <= TickMath.MIN_SQRT_PRICE) limit = TickMath.MIN_SQRT_PRICE + 1;
 
         BalanceDelta delta = poolManager.swap(
             poolKey,
             IPoolManager.SwapParams({
                 zeroForOne: true,
                 amountSpecified: -int256(ethAmount),
-                sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+                sqrtPriceLimitX96: limit
             }),
             ""   // empty hookData → not a router swap
         );
 
-        // Settle ETH (we owe it from our own balance)
-        poolManager.settle{value: ethAmount}();
-
-        // Take KOTH out
+        // For exact-input zeroForOne:
+        //   delta.amount0 ≤ 0 (we owe ETH; |a0| ≤ ethAmount if clamped)
+        //   delta.amount1 ≥ 0 (manager owes us KOTH)
+        int128 a0 = delta.amount0();
         int128 a1 = delta.amount1();
-        require(a1 > 0, "neg KOTH out");
-        uint256 kothOut = uint256(uint128(a1));
-        poolManager.take(poolKey.currency1, address(this), kothOut);
+        uint256 ethSpent = a0 < 0 ? uint256(uint128(-a0)) : 0;
+        uint256 kothOut = a1 > 0 ? uint256(uint128(a1)) : 0;
 
-        return abi.encode(kothOut);
+        if (kothOut < minKothOut) revert SlippageExceeded();
+
+        if (ethSpent > 0) poolManager.settle{value: ethSpent}();
+        if (kothOut > 0) poolManager.take(poolKey.currency1, address(this), kothOut);
+
+        return abi.encode(kothOut, ethSpent);
     }
 
     function afterSwap(
@@ -408,24 +466,31 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     }
 
     function _dethroneFor(address oldKing, bytes32 reason) internal {
+        uint256 reignId = reignsCount;
         Reign memory data = Reign({
             king: oldKing,
-            reignId: reignsCount,
+            reignId: reignId,
             startBlock: highestBuyBlock,
             endBlock: block.number,
             ethEarned: kingBalances[oldKing],
             recordHigh: highestBuyAmount,
             dethroneReason: reason
         });
-        soul.mintReign(oldKing, reignsCount, data);
-        scroll.mintReign(oldKing, reignsCount, data);
-        emit KingDethroned(oldKing, reason, data.ethEarned);
 
+        // State writes BEFORE external calls (CEI). Also: if either mint reverts
+        // (e.g. king is a contract that rejects ERC721 callbacks), dethrone must still
+        // succeed — otherwise an attacker contract crowns itself and becomes permanent
+        // king by refusing the Soul/Scroll mints.
         currentKing = address(0);
         dethronedAt[oldKing] = block.number;
         highestBuyAmount = 0;
         highestBuyBlock = 0;
-        reignsCount += 1;
+        reignsCount = reignId + 1;
+
+        emit KingDethroned(oldKing, reason, data.ethEarned);
+
+        try soul.mintReign(oldKing, reignId, data) {} catch {}
+        try scroll.mintReign(oldKing, reignId, data) {} catch {}
     }
 
     function beforeDonate(

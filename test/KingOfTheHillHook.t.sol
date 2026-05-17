@@ -6,6 +6,11 @@ import {DeployFixture} from "./helpers/DeployFixture.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolSwapTest} from "v4-core/src/test/PoolSwapTest.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+import {Currency} from "v4-core/src/types/Currency.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {KOTHToken} from "src/KOTHToken.sol";
+import {KingOfTheHillHook} from "src/KingOfTheHillHook.sol";
+import {KOTHRouter} from "src/KOTHRouter.sol";
 
 contract KingOfTheHillHookTest is DeployFixture {
     function setUp() public {
@@ -239,7 +244,7 @@ contract KingOfTheHillHookTest is DeployFixture {
     function test_ForfeitRevertsIfNotDethroned() public {
         address rando = makeAddr("rando");
         vm.expectRevert();   // NotDethroned
-        kothHook.forfeit(rando);
+        kothHook.forfeit(rando, 0);
     }
 
     function test_ForfeitRevertsTooEarly() public {
@@ -255,7 +260,7 @@ contract KingOfTheHillHookTest is DeployFixture {
         address keeper = makeAddr("keeper");
         vm.prank(keeper);
         vm.expectRevert();   // TooEarly
-        kothHook.forfeit(alice);
+        kothHook.forfeit(alice, 0);
     }
 
     function test_ForfeitBurnsKothAndPaysKeeper() public {
@@ -285,7 +290,7 @@ contract KingOfTheHillHookTest is DeployFixture {
         uint256 keeperBalPre = keeper.balance;
 
         vm.prank(keeper);
-        kothHook.forfeit(alice);
+        kothHook.forfeit(alice, 0);
 
         // Keeper got tip
         uint256 expectedTip = aliceBalance * kothHook.KEEPER_TIP_BPS() / 10_000;
@@ -377,5 +382,212 @@ contract KingOfTheHillHookTest is DeployFixture {
             }
         }
         assertTrue(found, "KingDethroned not emitted");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Security fixes
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // C-01: setHook must reject non-admin (would-be hijacker frontrunning deploy)
+    function test_SetHookOnlyAdmin() public {
+        address[] memory empty = new address[](0);
+        // Fresh token so HookAlreadySet doesn't mask the auth check.
+        KOTHToken fresh = new KOTHToken(empty);   // admin = this
+        address rando = makeAddr("rando");
+        vm.prank(rando);
+        vm.expectRevert(KOTHToken.OnlyAdmin.selector);
+        fresh.setHook(makeAddr("attacker"));
+    }
+
+    // C-02: seedRecord must reject non-admin
+    function test_SeedRecordOnlyAdmin() public {
+        address rando = makeAddr("rando");
+        vm.prank(rando);
+        vm.expectRevert(KingOfTheHillHook.OnlyAdmin.selector);
+        kothHook.seedRecord(1 ether, block.number);
+    }
+
+    // C-03: poolKey init must reject non-admin and poison keys
+    function test_InitializePoolKeyOnlyAdminAndValidated() public {
+        // Deploy a fresh hook impl + etch it so we can test the un-initialised path.
+        KingOfTheHillHook fresh = new KingOfTheHillHook(
+            IPoolManager(address(manager)),
+            koth,
+            soul,
+            scroll,
+            treasury,
+            address(kothRouter),
+            address(this)
+        );
+        address freshAddr = address(uint160(0x1100_0000_00FF));
+        vm.etch(freshAddr, address(fresh).code);
+        KingOfTheHillHook newHook = KingOfTheHillHook(payable(freshAddr));
+
+        address rando = makeAddr("rando");
+        vm.prank(rando);
+        vm.expectRevert(KingOfTheHillHook.OnlyAdmin.selector);
+        newHook.initializePoolKey(pk);
+
+        // Invalid currency1 — admin can still call, but validation rejects.
+        PoolKey memory bad = pk;
+        bad.currency1 = Currency.wrap(address(0xdeadbeef));
+        vm.expectRevert(KingOfTheHillHook.InvalidPoolKey.selector);
+        newHook.initializePoolKey(bad);
+    }
+
+    function test_RouterInitializePoolOnlyAdmin() public {
+        address rando = makeAddr("rando");
+        vm.prank(rando);
+        vm.expectRevert(KOTHRouter.OnlyAdmin.selector);
+        kothRouter.initializePool(pk);
+    }
+
+    // C-04: a smart-contract king that rejects ERC721 must still be dethrone-able
+    function test_ContractKingCanBeDethroned() public {
+        ContractKing king = new ContractKing(kothRouter);
+        vm.deal(address(king), 5 ether);
+        king.buyToCrown(2 ether);
+        assertEq(kothHook.currentKing(), address(king));
+
+        address alice = makeAddr("alice");
+        deal(alice, 5 ether);
+        vm.prank(alice);
+        kothRouter.buy{value: 3 ether}(0);   // > 2 * 1.03
+        // Without try/catch around mintReign, alice's swap would revert here and
+        // ContractKing would be permaking. With the fix, alice replaces it.
+        assertEq(kothHook.currentKing(), alice);
+        // No NFTs minted to ContractKing — the try/catch swallowed the mint reverts.
+        assertEq(soul.balanceOf(address(king)), 0);
+        assertEq(scroll.balanceOf(address(king)), 0);
+    }
+
+    // C-05: forfeit honours keeper-supplied minKothOut
+    function test_ForfeitSlippageReverts() public {
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        deal(alice, 10 ether);
+        deal(bob, 5 ether);
+
+        vm.prank(alice); kothRouter.buy{value: 5 ether}(0);
+        vm.prank(bob);   kothRouter.buy{value: 1 ether}(0);
+
+        // Dethrone alice via dump
+        vm.startPrank(alice);
+        koth.approve(address(kothRouter), type(uint256).max);
+        kothRouter.sell(koth.balanceOf(alice), 0);
+        vm.stopPrank();
+
+        vm.roll(block.number + kothHook.FORFEIT_BLOCKS() + 1);
+
+        address keeper = makeAddr("keeper");
+        vm.prank(keeper);
+        vm.expectRevert(KingOfTheHillHook.SlippageExceeded.selector);
+        kothHook.forfeit(alice, type(uint256).max);   // absurdly high min
+    }
+
+    // Tip-after-buyback ordering: the keeper sees the burn already committed
+    // when their receive() fires — so they have no intra-tx window to manipulate
+    // sqrtPriceX96 before the buyback reads it.
+    function test_ForfeitPaysKeeperAfterBuyback() public {
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        deal(alice, 10 ether);
+        deal(bob, 5 ether);
+        vm.prank(alice); kothRouter.buy{value: 5 ether}(0);
+        vm.prank(bob);   kothRouter.buy{value: 1 ether}(0);
+
+        // Dethrone alice via dump
+        vm.startPrank(alice);
+        koth.approve(address(kothRouter), type(uint256).max);
+        kothRouter.sell(koth.balanceOf(alice), 0);
+        vm.stopPrank();
+        vm.roll(block.number + kothHook.FORFEIT_BLOCKS() + 1);
+
+        SandwichKeeper keeper = new SandwichKeeper(kothHook, koth);
+        uint256 supplyPre = koth.totalSupply();
+
+        keeper.callForfeit(alice);
+
+        // The keeper's receive() fired AFTER the burn, so the supply it saw is
+        // already lower than the pre-forfeit total. Pre-fix this would have
+        // equalled supplyPre.
+        assertLt(keeper.kothSupplyOnReceive(), supplyPre);
+        // And the keeper got their tip.
+        assertGt(address(keeper).balance, 0);
+    }
+
+    // M-03: dust coffer goes entirely to keeper, no swap reverts
+    function test_ForfeitDustSweepsToKeeper() public {
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        deal(alice, 1 ether);
+        deal(bob, 1 ether);
+
+        // Small reign, tiny fee accrual: 2% of 0.01 = 0.0002 ETH < MIN_FORFEIT_AMOUNT
+        vm.prank(alice); kothRouter.buy{value: 0.01 ether}(0);
+        vm.prank(bob);   kothRouter.buy{value: 0.01 ether}(0);
+
+        uint256 aliceCoffer = kothHook.kingBalances(alice);
+        assertGt(aliceCoffer, 0);
+        assertLt(aliceCoffer, kothHook.MIN_FORFEIT_AMOUNT());
+
+        // Dethrone alice via dump
+        vm.startPrank(alice);
+        koth.approve(address(kothRouter), type(uint256).max);
+        kothRouter.sell(koth.balanceOf(alice), 0);
+        vm.stopPrank();
+        vm.roll(block.number + kothHook.FORFEIT_BLOCKS() + 1);
+
+        address keeper = makeAddr("keeper");
+        uint256 keeperBalPre = keeper.balance;
+        uint256 supplyPre = koth.totalSupply();
+
+        vm.prank(keeper);
+        kothHook.forfeit(alice, 0);
+
+        // Keeper got the full dust, no KOTH burned
+        assertEq(keeper.balance - keeperBalPre, aliceCoffer);
+        assertEq(koth.totalSupply(), supplyPre);   // no buyback fired
+        assertEq(kothHook.kingBalances(alice), 0);
+    }
+}
+
+/// @notice Test helper: a contract that buys KOTH (becomes king) but rejects
+///         ERC721 callbacks. Without the dethrone try/catch fix it would be a
+///         permaking — its successor's swap would revert on Soul mint.
+contract ContractKing {
+    KOTHRouter public immutable router;
+    constructor(KOTHRouter _router) { router = _router; }
+    function buyToCrown(uint256 amount) external {
+        router.buy{value: amount}(0);
+    }
+    receive() external payable {}
+    // Notably no `onERC721Received` — that's the whole point.
+}
+
+/// @notice Test helper: a malicious keeper that records whether its receive()
+///         was called BEFORE or AFTER the buyback.  Pre-fix, the tip arrived
+///         before the swap and the receive() could re-enter `poolManager.unlock`
+///         to shift the price; post-fix the buyback is committed before any
+///         tip transfer, so the keeper has no window.
+contract SandwichKeeper {
+    KingOfTheHillHook public immutable hook;
+    KOTHToken public immutable koth;
+    uint256 public kothSupplyOnReceive;
+
+    constructor(KingOfTheHillHook _hook, KOTHToken _koth) {
+        hook = _hook;
+        koth = _koth;
+    }
+
+    function callForfeit(address staleKing) external {
+        hook.forfeit(staleKing, 0);
+    }
+
+    receive() external payable {
+        // Snapshot the KOTH supply at the moment we receive the tip. With the
+        // post-fix ordering this is AFTER the burn, so it is strictly less than
+        // the pre-forfeit supply.
+        kothSupplyOnReceive = koth.totalSupply();
     }
 }

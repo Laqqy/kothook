@@ -17,12 +17,10 @@ contract KOTHRouter is IUnlockCallback {
     IPoolManager public immutable poolManager;
     KOTHToken public immutable koth;
     KingOfTheHillHook public immutable hook;
+    address public immutable admin;
 
     PoolKey public poolKey;
     bool public poolInitialized;
-
-    /// @dev Slot used by both the router (TSTORE) and the hook (TLOAD) to pass the user address.
-    bytes32 internal constant USER_TSLOT = keccak256("koth.user");
 
     enum SwapKind { Buy, Sell }
 
@@ -30,16 +28,25 @@ contract KOTHRouter is IUnlockCallback {
     error InsufficientOutput();
     error PoolKeyAlreadySet();
     error ZeroAmount();
+    error OnlyAdmin();
+    error InvalidPoolKey();
 
     constructor(IPoolManager _poolManager, KOTHToken _koth, KingOfTheHillHook _hook) {
         poolManager = _poolManager;
         koth = _koth;
         hook = _hook;
+        admin = msg.sender;
     }
 
-    /// @notice One-time registration of the pool key for this router.
+    /// @notice One-time registration of the pool key for this router. Admin-only — a
+    ///         permissionless version would let a frontrunner bind the router to a
+    ///         poison pool, bricking buy/sell for end users.
     function initializePool(PoolKey calldata key) external {
+        if (msg.sender != admin) revert OnlyAdmin();
         if (poolInitialized) revert PoolKeyAlreadySet();
+        if (Currency.unwrap(key.currency0) != address(0)) revert InvalidPoolKey();
+        if (Currency.unwrap(key.currency1) != address(koth)) revert InvalidPoolKey();
+        if (address(key.hooks) != address(hook)) revert InvalidPoolKey();
         poolKey = key;
         poolInitialized = true;
     }

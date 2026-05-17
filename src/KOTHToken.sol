@@ -5,10 +5,11 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
 contract KOTHToken is ERC20, ERC20Burnable {
-    uint256 public constant TOTAL_SUPPLY = 10_000_000 ether;
-    uint256 public constant SNIPER_BLOCKS = 100;
+    uint256 public constant TOTAL_SUPPLY = 1_000_000 ether;
+    uint256 public constant SNIPER_BLOCKS = 175;       // ~35 min at 12s/block
     uint256 public constant MAX_WALLET_BPS = 100;       // 1%
     uint256 public immutable LAUNCH_BLOCK;
+    address public immutable admin;
 
     mapping(address => bool) public isExempt;
 
@@ -17,15 +18,18 @@ contract KOTHToken is ERC20, ERC20Burnable {
     error AntiSniperLimit(uint256 wouldHave, uint256 maxAllowed);
     error HookAlreadySet();
     error OnlyHook();
+    error OnlyAdmin();
 
     constructor(address[] memory exemptions) ERC20("King of the Hill", "KOTH") {
         LAUNCH_BLOCK = block.number;
+        admin = msg.sender;
         isExempt[msg.sender] = true;
         for (uint256 i; i < exemptions.length; ++i) isExempt[exemptions[i]] = true;
         _mint(msg.sender, TOTAL_SUPPLY);
     }
 
     function setHook(address _hook) external {
+        if (msg.sender != admin) revert OnlyAdmin();
         if (hook != address(0)) revert HookAlreadySet();
         hook = _hook;
         isExempt[_hook] = true;
