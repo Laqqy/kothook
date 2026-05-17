@@ -7,3 +7,11 @@ deployments/
 # Playwright MCP outputs
 .playwright-mcp/
 /koth-*.png
+
+# Workflow screenshot artifacts (not source)
+/chronicle-*.png
+/home-*.png
+/quote-*.png
+/size-*.png
+/throne-*.png
+/whitepaper-*.png
