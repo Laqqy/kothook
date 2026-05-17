@@ -11,12 +11,15 @@ export function Crown(props: SVGProps<SVGSVGElement>) {
       strokeLinejoin="round"
       {...props}
     >
-      <path d="M4 22 L6 10 L12 16 L16 7 L20 16 L26 10 L28 22 Z" />
+      <path d="M4 22 L6 10 L12 16 L16 6 L20 16 L26 10 L28 22 Z" />
+      <path d="M4 22 L28 22" />
       <line x1="4" y1="25" x2="28" y2="25" />
       <line x1="6" y1="28" x2="26" y2="28" />
-      <circle cx="6" cy="10" r="1.2" fill="currentColor" />
-      <circle cx="16" cy="7" r="1.4" fill="currentColor" />
-      <circle cx="26" cy="10" r="1.2" fill="currentColor" />
+      <path d="M10 25 L10 28 M16 25 L16 28 M22 25 L22 28" opacity="0.7" />
+      <circle cx="6" cy="10" r="1.4" fill="currentColor" />
+      <circle cx="16" cy="6" r="1.7" fill="currentColor" />
+      <circle cx="26" cy="10" r="1.4" fill="currentColor" />
+      <path d="M14 18 L18 18" opacity="0.5" />
     </svg>
   );
 }
@@ -77,13 +80,38 @@ export function CornerOrnament({ className = '' }: { className?: string }) {
       viewBox="0 0 60 60"
       fill="none"
       stroke="currentColor"
-      strokeWidth="0.8"
+      strokeWidth="0.9"
+      strokeLinecap="round"
       className={className}
     >
-      <path d="M0 18 L4 18 L4 4 L18 4 L18 0" />
-      <circle cx="4" cy="4" r="1.5" fill="currentColor" />
-      <path d="M10 4 L14 4" />
-      <path d="M4 10 L4 14" />
+      {/* filigree corner with scroll terminations */}
+      <path d="M0 18 C 4 18 6 16 6 6 C 8 14 14 14 18 14" />
+      <path d="M14 0 C 14 4 12 6 6 6" />
+      <path d="M0 26 C 4 24 6 22 6 18" opacity="0.6" />
+      <path d="M22 0 C 22 4 20 6 16 6" opacity="0.6" />
+      <circle cx="6" cy="6" r="1.6" fill="currentColor" />
+      <circle cx="14" cy="14" r="0.9" fill="currentColor" opacity="0.7" />
+      <path d="M2 12 C 4 12 5 11 6 10" />
+      <path d="M12 2 C 12 4 11 5 10 6" />
+    </svg>
+  );
+}
+
+export function Hourglass(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M6 2 L18 2 L18 6 L13 12 L18 18 L18 22 L6 22 L6 18 L11 12 L6 6 Z" />
+      <path d="M9 5 L15 5" opacity="0.7" />
+      <path d="M9 19 L15 19" opacity="0.7" />
+      <path d="M10 14 L14 14" opacity="0.5" />
     </svg>
   );
 }
@@ -99,9 +127,64 @@ export function HairlineDivider({
     <div className={`flex items-center gap-3 ${className}`}>
       <div className="hairline flex-1" />
       {ornament && (
-        <div className="text-bronze-bright opacity-70">{ornament}</div>
+        <div className="text-gold-leaf opacity-80">{ornament}</div>
       )}
       <div className="hairline flex-1" />
+    </div>
+  );
+}
+
+/**
+ * Illuminated drop cap — first letter of a section title, framed in lapis with
+ * gold leaf border. Styled via `.illuminated-initial` in globals.css.
+ */
+export function Initial({
+  char,
+  className = '',
+  size = '1em',
+}: {
+  char: string;
+  className?: string;
+  size?: string;
+}) {
+  return (
+    <span
+      className={`illuminated-initial ${className}`}
+      style={{ fontSize: size }}
+      aria-hidden
+    >
+      {char}
+    </span>
+  );
+}
+
+/**
+ * Wax seal — vermilion disc with a Roman numeral pressed into it. Used to
+ * mark a reign number on a card or to confirm a destructive action.
+ */
+export function WaxSeal({
+  numeral,
+  size = 56,
+  muted = false,
+  className = '',
+}: {
+  numeral: string;
+  size?: number;
+  muted?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`wax-seal ${muted ? 'wax-seal-muted' : ''} ${className}`}
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.34),
+        letterSpacing: '0.04em',
+      }}
+      aria-hidden
+    >
+      {numeral || '·'}
     </div>
   );
 }

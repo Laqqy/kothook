@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatUnits,
   parseEther,
@@ -16,16 +16,18 @@ import { KOTHRouterAbi, KOTHTokenAbi, KingOfTheHillHookAbi } from '@/abis';
 import { useContracts, useIsDeployed } from '@/hooks/use-contracts';
 import { useKing } from '@/hooks/use-king';
 import { useUser } from '@/hooks/use-user';
+import { useQuote } from '@/hooks/use-quote';
 import { mockPricing } from './mock-data';
 import { formatDecimal, formatWeiETH, formatWeiKOTH } from './format';
 import { Crown, HairlineDivider, Asterism } from './ornaments';
 
 type Mode = 'acquire' | 'abdicate';
 
-// TODO: replace with a quote derived from PoolManager.slot0 via StateLibrary
-// once liquidity is real. For now this is a constant-rate placeholder.
-const KOTH_PER_ETH = mockPricing.kothPerEth;
-const ETH_PER_KOTH = 1 / KOTH_PER_ETH;
+// Fallback rate shown only when no on-chain quote is available (demo mode,
+// pre-mount, very first render before debounce).
+const FALLBACK_KOTH_PER_ETH = mockPricing.kothPerEth;
+
+const HOLD_MS = 750;
 
 export function SwapWidget() {
   const [mode, setMode] = useState<Mode>('acquire');
@@ -47,10 +49,34 @@ export function SwapWidget() {
     }
   }, [amount, numericAmount]);
 
+  const quote = useQuote(inputWei, mode === 'acquire');
+
   const receive = useMemo(() => {
-    if (mode === 'acquire') return numericAmount * KOTH_PER_ETH;
-    return numericAmount * ETH_PER_KOTH;
-  }, [mode, numericAmount]);
+    if (numericAmount <= 0) return 0;
+    if (quote.isQuoted && quote.amountOutWei > 0n) {
+      return Number(quote.amountOutWei) / 1e18;
+    }
+    if (mode === 'acquire') return numericAmount * FALLBACK_KOTH_PER_ETH;
+    return numericAmount / FALLBACK_KOTH_PER_ETH;
+  }, [mode, numericAmount, quote.isQuoted, quote.amountOutWei]);
+
+  const rateSubtle = useMemo(() => {
+    if (mode === 'acquire') {
+      if (quote.isQuoted && numericAmount > 0) {
+        const rate = receive / numericAmount;
+        return `1 Ξ ≈ ${formatDecimal(rate, { maximumFractionDigits: 0 })} KOTH · live quote`;
+      }
+      if (quote.isLoading)
+        return `Fetching live rate from Uniswap V4 Quoter…`;
+      return `1 Ξ ≈ ${formatDecimal(FALLBACK_KOTH_PER_ETH, { maximumFractionDigits: 0 })} KOTH (placeholder)`;
+    }
+    if (quote.isQuoted && numericAmount > 0) {
+      const rate = receive / numericAmount;
+      return `1 KOTH ≈ ${formatDecimal(rate, { maximumFractionDigits: 8 })} Ξ · live quote`;
+    }
+    if (quote.isLoading) return `Fetching live rate from Uniswap V4 Quoter…`;
+    return `1 KOTH ≈ ${formatDecimal(1 / FALLBACK_KOTH_PER_ETH, { maximumFractionDigits: 8 })} Ξ (placeholder)`;
+  }, [mode, quote.isQuoted, quote.isLoading, numericAmount, receive]);
 
   const willCrown =
     mode === 'acquire' && inputWei > 0n && inputWei > king.thresholdWei;
@@ -59,6 +85,14 @@ export function SwapWidget() {
     mode === 'acquire' ? user.ethBalanceWei : user.kothBalanceWei;
 
   const insufficientFunds = inputWei > userBalanceWei;
+
+  const isReigningKing = useMemo(() => {
+    if (!address) return false;
+    return address.toLowerCase() === king.currentKing.toLowerCase();
+  }, [address, king.currentKing]);
+
+  const willDethroneSelf =
+    mode === 'abdicate' && isReigningKing && inputWei > 0n;
 
   // ─── KOTH allowance for Sell flow ────────────────────────────────────────
   const allowance = useReadContract({
@@ -82,14 +116,12 @@ export function SwapWidget() {
   const swapReceipt = useWaitForTransactionReceipt({ hash: swapTx.data });
   const approveReceipt = useWaitForTransactionReceipt({ hash: approveTx.data });
 
-  // Re-fetch the allowance after a successful approval.
   useEffect(() => {
     if (approveReceipt.isSuccess) {
       void allowance.refetch();
     }
   }, [approveReceipt.isSuccess, allowance]);
 
-  // Clear the input + reset the swap state after a successful swap.
   useEffect(() => {
     if (swapReceipt.isSuccess) {
       setAmount('');
@@ -116,7 +148,7 @@ export function SwapWidget() {
         address: kothRouter,
         abi: KOTHRouterAbi,
         functionName: 'buy',
-        args: [0n], // minKothOut = 0 (no slippage check for now)
+        args: [0n],
         value: inputWei,
       });
     } else {
@@ -150,6 +182,7 @@ export function SwapWidget() {
     if (mode === 'acquire') {
       return willCrown ? 'Ascend the throne' : 'Tribute paid · no crown';
     }
+    if (willDethroneSelf) return 'Hold to seal · abdicate the crown';
     return 'Abdicate & sell';
   }, [
     isConnected,
@@ -161,6 +194,7 @@ export function SwapWidget() {
     isApproving,
     isSwapping,
     willCrown,
+    willDethroneSelf,
   ]);
 
   const buttonDisabled =
@@ -170,26 +204,25 @@ export function SwapWidget() {
     insufficientFunds ||
     isWorking;
 
-  const onClickMain = needsApprove ? onApprove : onAction;
   const showCrownStyle = willCrown && mode === 'acquire' && !needsApprove;
+  const needsHold = willDethroneSelf && !needsApprove && !isWorking;
 
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
     <aside
       id="acquire"
-      className="reveal engraved rounded-sm relative overflow-hidden"
+      className="reveal vellum-card rounded-sm relative overflow-hidden"
       style={{ animationDelay: '500ms' }}
     >
-      {/* header strip */}
       <div className="px-5 pt-5 pb-3">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 text-bronze-bright">
+          <div className="flex items-center gap-2 text-gold-leaf">
             <Crown className="w-4 h-4" />
             <span className="font-mono text-[10px] uppercase tracking-[0.3em]">
               Ledger of Succession
             </span>
           </div>
-          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-stone-soft">
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-stone">
             Folio · KOTH/Ξ
           </span>
         </div>
@@ -197,6 +230,7 @@ export function SwapWidget() {
         <div className="grid grid-cols-2 mt-4 border border-bronze rounded-sm overflow-hidden">
           <TabButton
             active={mode === 'acquire'}
+            variant="acquire"
             onClick={() => {
               setMode('acquire');
               setAmount('');
@@ -206,6 +240,7 @@ export function SwapWidget() {
           </TabButton>
           <TabButton
             active={mode === 'abdicate'}
+            variant="abdicate"
             onClick={() => {
               setMode('abdicate');
               setAmount('');
@@ -230,8 +265,7 @@ export function SwapWidget() {
           onMax={() =>
             setAmount(
               mode === 'acquire'
-                ? // Leave a small buffer for gas when maxing ETH.
-                  formatUnits(
+                ? formatUnits(
                     user.ethBalanceWei > parseEther('0.01')
                       ? user.ethBalanceWei - parseEther('0.01')
                       : 0n,
@@ -243,7 +277,7 @@ export function SwapWidget() {
         />
 
         <div className="flex justify-center my-2">
-          <div className="w-7 h-7 rounded-sm bg-vellum border border-bronze flex items-center justify-center text-bronze-bright">
+          <div className="w-7 h-7 rounded-sm bg-vellum border border-bronze flex items-center justify-center text-gold-leaf">
             <svg viewBox="0 0 12 12" className="w-3 h-3" fill="currentColor">
               <path d="M6 0 L6 9 L2 5 L1 6 L6 11 L11 6 L10 5 L6 9 Z" />
             </svg>
@@ -254,7 +288,7 @@ export function SwapWidget() {
           label="Receive"
           unit={mode === 'acquire' ? 'KOTH' : 'ETH'}
           value={receive}
-          subtle={`Rate · 1 Ξ ≈ ${formatDecimal(KOTH_PER_ETH, { maximumFractionDigits: 2 })} KOTH (placeholder)`}
+          subtle={rateSubtle}
         />
 
         {/* Threshold strip */}
@@ -263,10 +297,10 @@ export function SwapWidget() {
             <div className="flex items-center gap-2">
               <span
                 className={`w-1.5 h-1.5 rounded-full inline-block ${
-                  showCrownStyle ? 'bg-gold throb' : 'bg-bronze-bright'
+                  showCrownStyle ? 'bg-gold throb' : 'bg-gold-leaf'
                 }`}
               />
-              <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright">
+              <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold-leaf">
                 Crown Threshold
               </span>
             </div>
@@ -275,42 +309,52 @@ export function SwapWidget() {
             </div>
           </div>
           <div
-            className={`mt-2 font-body text-[12px] leading-snug transition-colors ${
+            className={`mt-2 font-body text-[13px] leading-snug transition-colors ${
               showCrownStyle
                 ? 'text-gold'
                 : mode === 'acquire'
-                  ? 'text-stone-soft'
-                  : 'text-crimson'
+                  ? 'text-stone'
+                  : 'text-vermilion-bright'
             }`}
           >
             {mode === 'acquire'
               ? showCrownStyle
                 ? '✦ Sufficient tribute. This buy will dethrone the current king and crown thee.'
                 : 'A buy strictly above this sum claims the throne and 2% of every subsequent swap.'
-              : 'Selling triggers an automatic dethrone if thou art the reigning sovereign.'}
+              : willDethroneSelf
+                ? '⚠ Thou art the reigning sovereign. Selling will trigger abdication.'
+                : 'Selling triggers an automatic dethrone if thou art the reigning sovereign.'}
           </div>
         </div>
 
-        {/* Action */}
-        <button
-          type="button"
-          onClick={onClickMain}
-          disabled={buttonDisabled}
-          className={`mt-5 w-full font-display text-lg tracking-wide uppercase py-3.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed ${
-            showCrownStyle
-              ? 'bg-gold text-ink hover:bg-flame border border-gold-soft shadow-[0_0_0_1px_rgba(245,165,36,0.4),0_0_24px_rgba(245,165,36,0.35)]'
-              : mode === 'acquire'
-                ? 'bg-bronze text-parchment hover:bg-bronze-soft border border-bronze-soft disabled:opacity-50'
-                : 'bg-crimson-deep text-parchment hover:bg-crimson border border-crimson disabled:opacity-50'
-          }`}
-        >
-          {buttonLabel}
-        </button>
+        {/* Action button — gold for coronation, vermilion+hold for self-dethrone */}
+        {needsHold ? (
+          <HoldButton
+            onConfirm={onAction}
+            label={buttonLabel}
+            disabled={buttonDisabled}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={needsApprove ? onApprove : onAction}
+            disabled={buttonDisabled}
+            className={`mt-5 w-full font-display tracking-[0.08em] text-base sm:text-lg uppercase py-3.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed ${
+              showCrownStyle
+                ? 'bg-gold text-ink hover:bg-flame border border-gold-soft shadow-[0_0_0_1px_rgba(232,179,57,0.5),0_0_32px_rgba(232,179,57,0.5)]'
+                : mode === 'acquire'
+                  ? 'bg-lapis text-parchment-cream hover:bg-lapis-bright border border-lapis-bright/50 disabled:opacity-50'
+                  : 'bg-vermilion-deep text-parchment-cream hover:bg-vermilion border border-vermilion disabled:opacity-50'
+            }`}
+          >
+            {buttonLabel}
+          </button>
+        )}
 
         {/* Tx receipt status */}
         {(swapTx.data || approveTx.data) && (
           <TxStatus
-            label={isApproving || approveTx.data && !approveReceipt.isSuccess ? 'Approval' : 'Swap'}
+            label={isApproving || (approveTx.data && !approveReceipt.isSuccess) ? 'Approval' : 'Swap'}
             hash={(isApproving || (approveTx.data && !approveReceipt.isSuccess) ? approveTx.data : swapTx.data) ?? null}
             isPending={isApproving || isSwapping}
             isSuccess={
@@ -325,11 +369,11 @@ export function SwapWidget() {
         )}
 
         <HairlineDivider
-          ornament={<Asterism className="w-2.5 h-2.5 text-bronze-bright" />}
+          ornament={<Asterism className="w-2.5 h-2.5 text-gold-leaf" />}
           className="mt-5"
         />
 
-        <ul className="mt-4 space-y-1.5 font-mono text-[10px] text-stone-soft uppercase tracking-[0.18em]">
+        <ul className="mt-4 space-y-1.5 font-mono text-[10px] text-stone uppercase tracking-[0.18em]">
           <li className="flex justify-between">
             <span>To Reigning King</span>
             <span className="text-parchment-soft tnum">2.00%</span>
@@ -352,6 +396,78 @@ export function SwapWidget() {
   );
 }
 
+/**
+ * Press-and-hold confirmation. Used when an Abdicate would dethrone the
+ * pressing wallet — prevents fat-finger self-dethrones.
+ */
+function HoldButton({
+  label,
+  onConfirm,
+  disabled,
+}: {
+  label: string;
+  onConfirm: () => void;
+  disabled: boolean;
+}) {
+  const [progress, setProgress] = useState(0);
+  const startedAt = useRef<number | null>(null);
+  const raf = useRef<number | null>(null);
+  const fired = useRef(false);
+
+  const stop = () => {
+    startedAt.current = null;
+    if (raf.current != null) cancelAnimationFrame(raf.current);
+    raf.current = null;
+    fired.current = false;
+    setProgress(0);
+  };
+
+  const tick = () => {
+    if (startedAt.current == null) return;
+    const elapsed = performance.now() - startedAt.current;
+    const p = Math.min(1, elapsed / HOLD_MS);
+    setProgress(p);
+    if (p >= 1) {
+      if (!fired.current) {
+        fired.current = true;
+        onConfirm();
+      }
+      stop();
+      return;
+    }
+    raf.current = requestAnimationFrame(tick);
+  };
+
+  const start = () => {
+    if (disabled || fired.current) return;
+    startedAt.current = performance.now();
+    raf.current = requestAnimationFrame(tick);
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onMouseDown={start}
+      onTouchStart={start}
+      onMouseUp={stop}
+      onMouseLeave={stop}
+      onTouchEnd={stop}
+      onTouchCancel={stop}
+      className="mt-5 w-full relative font-display tracking-[0.08em] text-base sm:text-lg uppercase py-3.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed bg-vermilion-deep text-parchment-cream hover:bg-vermilion border border-vermilion-bright disabled:opacity-50 overflow-hidden select-none"
+    >
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 bg-vermilion-bright/70 transition-[width] duration-75 ease-linear"
+        style={{ width: `${progress * 100}%` }}
+      />
+      <span className="relative drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+        {label}
+      </span>
+    </button>
+  );
+}
+
 function ClaimCard({
   pullWei,
   hook,
@@ -367,7 +483,7 @@ function ClaimCard({
     <div className="mt-5 engraved-inset rounded-sm px-4 py-3 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold-soft">
+          <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold">
             Unclaimed Tribute
           </div>
           <div className="font-display text-xl tnum text-parchment mt-1">
@@ -384,7 +500,7 @@ function ClaimCard({
               functionName: 'claim',
             })
           }
-          className="shrink-0 font-mono text-[11px] uppercase tracking-[0.2em] px-3 py-2 bg-gold text-ink hover:bg-flame rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 font-mono text-[11px] uppercase tracking-[0.2em] px-3 py-2 bg-gold text-ink hover:bg-flame rounded-sm disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
         >
           {claimReceipt.isSuccess
             ? '✓ Claimed'
@@ -423,7 +539,7 @@ function TxStatus({
   return (
     <div className="mt-3 engraved-inset rounded-sm px-3 py-2 font-mono text-[10px] tracking-wider">
       {error ? (
-        <div className="text-crimson">
+        <div className="text-vermilion-bright">
           {label}: {short(error)}
         </div>
       ) : isSuccess ? (
@@ -431,7 +547,7 @@ function TxStatus({
           {label} ✓ <span className="text-stone">{short(hash!)}</span>
         </div>
       ) : isPending ? (
-        <div className="text-bronze-bright">
+        <div className="text-gold-leaf">
           {label} sealing… <span className="text-stone">{short(hash!)}</span>
         </div>
       ) : (
@@ -450,20 +566,27 @@ function short(s: string, head = 10, tail = 8) {
 
 function TabButton({
   active,
+  variant,
   onClick,
   children,
 }: {
   active: boolean;
+  variant: 'acquire' | 'abdicate';
   onClick: () => void;
   children: React.ReactNode;
 }) {
+  const activeAccent =
+    variant === 'acquire' ? 'bg-gold' : 'bg-vermilion-bright';
+  const activeText =
+    variant === 'acquire' ? 'text-gold' : 'text-vermilion-bright';
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative font-display tracking-wide text-base py-2.5 transition-colors ${
+      className={`relative font-display tracking-[0.1em] uppercase text-sm sm:text-base py-3 transition-colors min-h-[44px] ${
         active
-          ? 'bg-vellum text-gold'
+          ? `bg-vellum ${activeText}`
           : 'bg-ash text-stone hover:text-parchment hover:bg-vellum/70'
       }`}
     >
@@ -471,7 +594,7 @@ function TabButton({
       {active && (
         <span
           aria-hidden
-          className="absolute -bottom-px left-3 right-3 h-px bg-gold"
+          className={`absolute -bottom-px left-3 right-3 h-px ${activeAccent}`}
         />
       )}
     </button>
@@ -496,13 +619,13 @@ function Field({
   return (
     <div className="engraved-inset rounded-sm px-4 py-3">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright">
+        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold-leaf">
           {label}
         </span>
         <button
           type="button"
           onClick={onMax}
-          className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone hover:text-gold transition-colors"
+          className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone hover:text-gold transition-colors py-1.5 px-1"
         >
           Bal · {balanceDisplay} <span className="text-gold-soft">MAX</span>
         </button>
@@ -513,9 +636,9 @@ function Field({
           placeholder="0.0"
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
-          className="flex-1 bg-transparent font-display text-3xl tnum text-parchment placeholder-stone-soft outline-none"
+          className="flex-1 bg-transparent font-display text-3xl tnum text-parchment placeholder-stone outline-none"
         />
-        <span className="font-mono text-sm text-bronze-bright tracking-widest">
+        <span className="font-mono text-sm text-gold-leaf tracking-widest">
           {unit}
         </span>
       </div>
@@ -537,10 +660,10 @@ function Receive({
   return (
     <div className="engraved-inset rounded-sm px-4 py-3">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright">
+        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold-leaf">
           {label}
         </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-soft">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone">
           Estimate
         </span>
       </div>
@@ -552,11 +675,11 @@ function Receive({
               })
             : '0'}
         </span>
-        <span className="font-mono text-sm text-bronze-bright tracking-widest">
+        <span className="font-mono text-sm text-gold-leaf tracking-widest">
           {unit}
         </span>
       </div>
-      <div className="font-mono text-[10px] tracking-wide text-stone-soft mt-1">
+      <div className="font-mono text-[10px] tracking-wide text-stone mt-1">
         {subtle}
       </div>
     </div>

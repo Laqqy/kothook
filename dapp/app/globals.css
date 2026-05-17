@@ -1,29 +1,64 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-ink: #0a0908;
-  --color-ash: #110e0c;
-  --color-vellum: #1a1612;
-  --color-vellum-soft: #221d18;
+  /* ───── Base / ink ───── */
+  --color-ink: #0c0a18;            /* warm midnight, slight blue undertone */
+  --color-ash: #110e1f;
+  --color-vellum: #181226;         /* dark vellum, the card surface */
+  --color-vellum-soft: #221a32;
+
+  /* ───── Bronze (kept, retuned warmer) ───── */
   --color-bronze: #3a2e1a;
   --color-bronze-soft: #5a4a2c;
-  --color-bronze-bright: #8a6f3e;
-  --color-gold: #f5a524;
-  --color-gold-soft: #c98c1a;
+  --color-bronze-bright: #a48450;
+
+  /* ───── Gold leaf (richer, slightly more orange than before) ───── */
+  --color-gold: #e8b339;
+  --color-gold-leaf: #d4a437;
+  --color-gold-soft: #b8862a;
   --color-gold-pale: #d4af6b;
-  --color-flame: #d97706;
-  --color-crimson: #9b1c1c;
-  --color-crimson-deep: #6a0f0f;
+  --color-flame: #f08c2a;
+
+  /* ───── Lapis blue (illuminated manuscript ultramarine) ───── */
+  --color-lapis-deep: #14245c;
+  --color-lapis: #2a4a9c;
+  --color-lapis-bright: #4a6cc7;
+
+  /* ───── Vermilion (wax-seal red, used for danger) ───── */
+  --color-vermilion: #c1272d;
+  --color-vermilion-deep: #7a161a;
+  --color-vermilion-bright: #e63946;
+
+  /* ───── Parchment (text + cream surfaces) ───── */
+  --color-parchment: #f0e2bf;
+  --color-parchment-cream: #f5e9c8;
+  --color-parchment-soft: #d8cdb0;
+
+  /* ───── Neutral text (raised for AA on ink) ───── */
+  --color-stone: #9c9082;
+  --color-stone-soft: #6f6659;
+
+  /* ───── Crimson (legacy alias = vermilion) ───── */
+  --color-crimson: var(--color-vermilion);
+  --color-crimson-deep: var(--color-vermilion-deep);
+
+  /* ───── Olive (kept for completion / chronicle states) ───── */
   --color-olive: #6b8e3f;
   --color-olive-deep: #4a6b27;
-  --color-parchment: #f4e9d4;
-  --color-parchment-soft: #d8cdb8;
-  --color-stone: #847a6e;
-  --color-stone-soft: #5a544c;
 
-  --font-display: var(--font-newsreader);
-  --font-body: var(--font-manrope);
+  /* ───── Fonts ───── */
+  --font-display: var(--font-cinzel);
+  --font-body: var(--font-garamond);
   --font-mono: var(--font-jetbrains);
+
+  /* ───── Custom breakpoints ─────
+   * Default Tailwind v4 stops at 2xl=1536px. We add two more for big monitors:
+   *   3xl  →  1920px  (16–24" 1080p ultrawides, smaller 4Ks)
+   *   4xl  →  2560px  (27" QHD, 32" 4K and up)
+   * Use as `3xl:max-w-[...]`, `4xl:text-[...]`, etc.
+   */
+  --breakpoint-3xl: 1920px;
+  --breakpoint-4xl: 2560px;
 }
 
 :root {
@@ -33,42 +68,141 @@
 html, body {
   background: var(--color-ink);
   color: var(--color-parchment);
-  font-family: var(--font-body), system-ui, sans-serif;
+  font-family: var(--font-body), Georgia, serif;
 }
 
-/* ───────── Engraved stone tablet ───────── */
+/* ───────── Vellum card (replaces engraved) ───────── */
+.vellum-card {
+  position: relative;
+  background:
+    radial-gradient(
+      ellipse at top,
+      rgba(232, 179, 57, 0.06) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, #1a1430 0%, #181226 100%);
+  border: 1px solid rgba(164, 132, 80, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(232, 179, 57, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
+    inset 0 0 32px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(232, 179, 57, 0.06),
+    0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ───────── Engraved (legacy alias — Throne/Chronicle still reference it) ─── */
 .engraved {
   background:
     radial-gradient(
       ellipse at center,
-      rgba(245, 165, 36, 0.04) 0%,
+      rgba(232, 179, 57, 0.05) 0%,
       transparent 60%
     ),
-    linear-gradient(180deg, #14110d 0%, #1a1612 100%);
+    linear-gradient(180deg, #1a1430 0%, #181226 100%);
+  border: 1px solid rgba(164, 132, 80, 0.32);
   box-shadow:
-    inset 0 1px 0 rgba(245, 165, 36, 0.08),
+    inset 0 1px 0 rgba(232, 179, 57, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.6),
     inset 0 0 24px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(245, 165, 36, 0.04);
-  border: 1px solid var(--color-bronze);
+    0 1px 0 rgba(232, 179, 57, 0.04);
 }
 
 .engraved-inset {
-  background: linear-gradient(180deg, #0a0807 0%, #100d0a 100%);
+  background: linear-gradient(180deg, #0e0b1c 0%, #14101f 100%);
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.7),
-    inset 0 -1px 0 rgba(245, 165, 36, 0.04);
-  border: 1px solid #2a2218;
+    inset 0 -1px 0 rgba(232, 179, 57, 0.04);
+  border: 1px solid #2a2240;
 }
 
-/* ───────── Shimmer text ───────── */
+/* ───────── Filigree border (gold-leaf frame) ───────── */
+.filigree {
+  position: relative;
+}
+.filigree::before,
+.filigree::after {
+  content: "";
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36' fill='none' stroke='%23d4a437' stroke-width='0.9'><path d='M0 14 C4 14 6 12 6 6 C6 12 12 14 18 14'/><path d='M14 0 C14 4 12 6 6 6'/><circle cx='6' cy='6' r='1.3' fill='%23d4a437'/><path d='M2 10 C5 10 6 9 6 6'/><path d='M10 2 C10 5 9 6 6 6'/></svg>");
+  background-repeat: no-repeat;
+}
+.filigree::before { top: -1px; left: -1px; }
+.filigree::after {
+  bottom: -1px;
+  right: -1px;
+  transform: scale(-1, -1);
+}
+
+/* ───────── Illuminated drop cap ───────── */
+.illuminated-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.05em;
+  background:
+    radial-gradient(
+      circle at 35% 30%,
+      rgba(232, 179, 57, 0.35) 0%,
+      transparent 60%
+    ),
+    linear-gradient(135deg, #14245c 0%, #2a4a9c 70%, #14245c 100%);
+  border: 1.5px solid var(--color-gold-leaf);
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 179, 57, 0.4),
+    inset 0 0 18px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(20, 36, 92, 0.6);
+  color: var(--color-gold);
+  font-family: var(--font-display), serif;
+  font-weight: 700;
+  font-style: normal;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  vertical-align: -0.08em;
+}
+
+/* ───────── Wax seal ───────── */
+.wax-seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(
+      circle at 30% 25%,
+      rgba(255, 200, 200, 0.4) 0%,
+      transparent 35%
+    ),
+    radial-gradient(
+      circle at 70% 75%,
+      rgba(0, 0, 0, 0.45) 0%,
+      transparent 60%
+    ),
+    linear-gradient(135deg, #e63946 0%, #c1272d 50%, #7a161a 100%);
+  color: var(--color-parchment-cream);
+  font-family: var(--font-display), serif;
+  font-weight: 700;
+  border-radius: 9999px;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.25),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.wax-seal-muted {
+  filter: grayscale(0.7) brightness(0.6);
+}
+
+/* ───────── Shimmer text (gold-leaf) ───────── */
 .shimmer-gold {
   background: linear-gradient(
     100deg,
     var(--color-gold-soft) 0%,
-    var(--color-parchment) 25%,
+    var(--color-parchment-cream) 25%,
     var(--color-gold) 45%,
-    var(--color-parchment) 65%,
+    var(--color-parchment-cream) 65%,
     var(--color-gold-soft) 100%
   );
   background-size: 200% 100%;
@@ -89,9 +223,10 @@ html, body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    var(--color-bronze-bright) 50%,
+    var(--color-gold-leaf) 50%,
     transparent 100%
   );
+  opacity: 0.55;
 }
 
 /* ───────── Reveal animations ───────── */
@@ -106,21 +241,28 @@ html, body {
 }
 
 @keyframes stamp {
-  0%   { opacity: 0; transform: scale(1.05) rotate(-0.4deg); }
-  60%  { opacity: 1; transform: scale(0.985) rotate(0.1deg); }
-  100% { opacity: 1; transform: scale(1) rotate(0); }
+  0%   { opacity: 0; transform: scale(1.08) rotate(-1deg); }
+  60%  { opacity: 1; transform: scale(0.97)  rotate(0.3deg); }
+  100% { opacity: 1; transform: scale(1)    rotate(0); }
 }
 
 .reveal       { animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .reveal-ink   { animation: ink-bloom 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .reveal-stamp { animation: stamp 1000ms cubic-bezier(0.3, 1.4, 0.6, 1) both; }
 
-/* ───────── Pulse on threshold dot ───────── */
+/* ───────── Throb (threshold) ───────── */
 @keyframes throb {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 165, 36, 0.5); }
-  50%      { box-shadow: 0 0 0 8px rgba(245, 165, 36, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 179, 57, 0.55); }
+  50%      { box-shadow: 0 0 0 8px rgba(232, 179, 57, 0); }
 }
 .throb { animation: throb 2.4s ease-in-out infinite; }
+
+/* ───────── Throb (vermilion, for danger states) ───────── */
+@keyframes throb-vermilion {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.55); }
+  50%      { box-shadow: 0 0 0 8px rgba(230, 57, 70, 0); }
+}
+.throb-vermilion { animation: throb-vermilion 1.8s ease-in-out infinite; }
 
 /* ───────── Decay drain bar ───────── */
 @keyframes drain-pulse {
@@ -128,6 +270,19 @@ html, body {
   50%      { opacity: 0.7; }
 }
 .drain-pulse { animation: drain-pulse 4s ease-in-out infinite; }
+
+@keyframes drain-pulse-urgent {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  50%      { opacity: 0.85; filter: brightness(1.35); }
+}
+.drain-pulse-urgent { animation: drain-pulse-urgent 0.9s ease-in-out infinite; }
+
+@keyframes flicker {
+  0%, 100% { box-shadow: 0 0 18px rgba(230, 57, 70, 0.55), inset 0 1px 0 rgba(255,255,255,0.2); }
+  45%      { box-shadow: 0 0 28px rgba(240, 140, 42, 0.7), inset 0 1px 0 rgba(255,255,255,0.3); }
+  55%      { box-shadow: 0 0 22px rgba(230, 57, 70, 0.6), inset 0 1px 0 rgba(255,255,255,0.2); }
+}
+.flicker { animation: flicker 1.1s ease-in-out infinite; }
 
 /* ───────── Marquee ───────── */
 @keyframes marquee {
@@ -154,7 +309,7 @@ html, body {
 
 /* RainbowKit override — tighten to monarch aesthetic */
 [data-rk] button {
-  font-family: var(--font-body), system-ui, sans-serif !important;
+  font-family: var(--font-body), Georgia, serif !important;
   font-weight: 500 !important;
   letter-spacing: 0.02em;
 }

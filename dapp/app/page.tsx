@@ -13,7 +13,7 @@ export default function Home() {
 
       <main className="relative z-10 flex-1">
         {/* Hero band: throne on the left, swap ledger on the right */}
-        <div className="mx-auto max-w-7xl px-6 pt-12 pb-16">
+        <div className="mx-auto max-w-7xl 2xl:max-w-[88rem] 3xl:max-w-[124rem] 4xl:max-w-[168rem] px-6 2xl:px-10 3xl:px-12 4xl:px-16 pt-12 pb-16">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
             <div className="lg:col-span-7">
               <Hero />
@@ -25,10 +25,10 @@ export default function Home() {
         </div>
 
         {/* Divider before stats */}
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-7xl 2xl:max-w-[88rem] 3xl:max-w-[124rem] 4xl:max-w-[168rem] px-6 2xl:px-10 3xl:px-12 4xl:px-16">
           <HairlineDivider
             ornament={
-              <div className="flex items-center gap-3 text-bronze-bright">
+              <div className="flex items-center gap-3 text-gold-leaf">
                 <Asterism className="w-3 h-3" />
                 <span className="font-mono text-[10px] uppercase tracking-[0.35em]">
                   State of the Realm
@@ -40,12 +40,12 @@ export default function Home() {
         </div>
 
         {/* Stat cards */}
-        <div className="mx-auto max-w-7xl px-6 py-12">
+        <div className="mx-auto max-w-7xl 2xl:max-w-[88rem] 3xl:max-w-[124rem] 4xl:max-w-[168rem] px-6 2xl:px-10 3xl:px-12 4xl:px-16 py-12">
           <StatCards />
         </div>
 
         {/* Protocol of Succession */}
-        <div className="mx-auto max-w-7xl px-6 pb-16">
+        <div className="mx-auto max-w-7xl 2xl:max-w-[88rem] 3xl:max-w-[124rem] 4xl:max-w-[168rem] px-6 2xl:px-10 3xl:px-12 4xl:px-16 pb-16">
           <Protocol />
         </div>
 
@@ -53,21 +53,31 @@ export default function Home() {
         <Marquee />
 
         {/* Footnote */}
-        <footer className="mx-auto max-w-7xl px-6 py-10 flex flex-col md:flex-row gap-4 justify-between items-center text-stone-soft">
+        <footer className="mx-auto max-w-7xl 2xl:max-w-[88rem] 3xl:max-w-[124rem] 4xl:max-w-[168rem] px-6 2xl:px-10 3xl:px-12 4xl:px-16 py-10 flex flex-col md:flex-row gap-4 justify-between items-center text-stone-soft">
           <div className="font-mono text-[10px] uppercase tracking-[0.3em]">
             $KOTH · A Uniswap V4 Hook Experiment
           </div>
           <div className="flex items-center gap-5 font-mono text-[10px] uppercase tracking-[0.3em]">
-            <a href="https://github.com" className="hover:text-gold transition-colors">
+            <a
+              href="https://github.com/koth-xyz/king-of-the-hill"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-gold transition-colors"
+            >
               Github
             </a>
-            <span className="text-bronze">·</span>
-            <a href="#" className="hover:text-gold transition-colors">
+            <span className="text-bronze-bright">·</span>
+            <a href="/whitepaper" className="hover:text-gold transition-colors">
               Whitepaper
             </a>
-            <span className="text-bronze">·</span>
-            <a href="#" className="hover:text-gold transition-colors">
-              Discord
+            <span className="text-bronze-bright">·</span>
+            <a
+              href="https://t.me/koth_xyz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-gold transition-colors"
+            >
+              Telegram
             </a>
           </div>
         </footer>

@@ -14,7 +14,7 @@ export function StatCards() {
 
   return (
     <section className="relative">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-bronze/60 rounded-sm overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 3xl:gap-5">
         <Card
           icon={<Crown className="w-4 h-4" />}
           label="Token Supply"
@@ -68,15 +68,15 @@ function Card({
 }) {
   return (
     <div
-      className="reveal relative bg-ash px-6 py-7 group hover:bg-vellum-soft transition-colors"
+      className="reveal relative vellum-card rounded-sm px-6 py-7 3xl:px-9 3xl:py-10 group hover:border-gold-leaf/45 transition-colors"
       style={{ animationDelay: `${delay + 900}ms` }}
     >
-      <span aria-hidden className="absolute top-2 left-2 w-2 h-px bg-bronze-bright" />
-      <span aria-hidden className="absolute top-2 left-2 w-px h-2 bg-bronze-bright" />
-      <span aria-hidden className="absolute bottom-2 right-2 w-2 h-px bg-bronze-bright" />
-      <span aria-hidden className="absolute bottom-2 right-2 w-px h-2 bg-bronze-bright" />
+      <span aria-hidden className="absolute top-2 left-2 w-2.5 h-px bg-gold-leaf" />
+      <span aria-hidden className="absolute top-2 left-2 w-px h-2.5 bg-gold-leaf" />
+      <span aria-hidden className="absolute bottom-2 right-2 w-2.5 h-px bg-gold-leaf" />
+      <span aria-hidden className="absolute bottom-2 right-2 w-px h-2.5 bg-gold-leaf" />
 
-      <div className="flex items-center gap-2.5 mb-4 text-bronze-bright">
+      <div className="flex items-center gap-2.5 mb-4 text-gold-leaf">
         {icon}
         <span className="font-mono text-[10px] uppercase tracking-[0.32em]">
           {label}
@@ -85,18 +85,18 @@ function Card({
 
       <div className="flex items-baseline gap-2">
         <span
-          className={`font-display tnum text-5xl leading-none ${
+          className={`font-display tnum text-5xl 3xl:text-6xl 4xl:text-7xl leading-none tracking-tight ${
             accent ? 'text-gold' : 'text-parchment'
           }`}
         >
           {primary}
         </span>
-        <span className="font-mono text-sm text-stone tracking-widest">
+        <span className="font-mono text-sm 3xl:text-base text-stone tracking-widest">
           {unit}
         </span>
       </div>
 
-      <div className="mt-3 font-mono text-[11px] text-stone-soft tracking-wide">
+      <div className="mt-3 font-mono text-[11px] 3xl:text-xs text-stone tracking-wide">
         {tail}
       </div>
     </div>

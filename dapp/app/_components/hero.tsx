@@ -9,10 +9,15 @@ import {
   reignName,
   toRoman,
 } from './format';
-import { Crown, HairlineDivider, Asterism } from './ornaments';
+import {
+  Crown,
+  HairlineDivider,
+  Asterism,
+  Initial,
+  Hourglass,
+} from './ornaments';
 
 function formatAddressEngraved(addr: string) {
-  // Group into 4-char segments for legibility on the engraved tablet.
   const body = addr.startsWith('0x') ? addr.slice(2) : addr;
   return '0x ' + (body.match(/.{1,4}/g) ?? []).join(' ');
 }
@@ -35,12 +40,10 @@ export function Hero() {
   const [secsLeft, setSecsLeft] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  // Rebase the countdown whenever the chain advances.
   useEffect(() => {
     setSecsLeft(Number(king.decayBlocksRemaining) * 12);
   }, [king.decayBlocksRemaining]);
 
-  // Tick down every second between block updates for a smooth UI.
   useEffect(() => {
     const id = setInterval(
       () => setSecsLeft((s) => Math.max(s - 1, 0)),
@@ -58,6 +61,7 @@ export function Hero() {
   }, [secsLeft]);
 
   const remainingPct = 100 - decayPct;
+  const isUrgent = hasKing && remainingPct < 25;
 
   const onCopy = () => {
     void navigator.clipboard.writeText(king.currentKing);
@@ -73,6 +77,12 @@ export function Hero() {
       ? king.blockNumber - reignStartedAt
       : 0n;
 
+  // Drop-cap is the first letter of the reign word, or "T" for "Throne Vacant".
+  const dropCapChar = hasKing
+    ? (reignWord.charAt(0) || 'R').toUpperCase()
+    : 'T';
+  const reignWordTail = hasKing ? reignWord.slice(1) : '';
+
   return (
     <section className="relative">
       {/* halo behind hero */}
@@ -81,26 +91,26 @@ export function Hero() {
         className="absolute inset-x-0 -top-16 h-96 -z-0 opacity-60 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse 60% 60% at 40% 0%, rgba(245,165,36,0.16) 0%, transparent 70%)',
+            'radial-gradient(ellipse 60% 60% at 40% 0%, rgba(232,179,57,0.16) 0%, transparent 70%)',
         }}
       />
 
       <div className="relative z-10">
         {/* Decree marker row */}
         <div
-          className="reveal flex items-center gap-4 text-bronze-bright text-[11px] font-mono uppercase tracking-[0.35em] flex-wrap"
+          className="reveal flex items-center gap-4 text-gold-leaf text-[11px] font-mono uppercase tracking-[0.35em] flex-wrap"
           style={{ animationDelay: '60ms' }}
         >
           <span>Royal Decree</span>
           <span className="text-gold">№ {decreeNumeral || 'O'}</span>
-          <span className="text-bronze">·</span>
+          <span className="text-bronze-bright">·</span>
           <span className="tnum text-stone">
             Block {hasMounted ? formatInt(king.blockNumber) : '—'}
           </span>
           {hasMounted && king.isDemo && (
             <span
-              className="ml-auto text-[10px] uppercase tracking-[0.3em] text-crimson border border-crimson/40 px-2 py-0.5 rounded-sm"
-              title="No contract addresses configured. Showing sample data — set NEXT_PUBLIC_LOCAL_KOTH / NEXT_PUBLIC_LOCAL_HOOK in dapp/.env.local to read on-chain state."
+              className="ml-auto text-[10px] uppercase tracking-[0.3em] text-vermilion-bright border border-vermilion/50 px-2 py-0.5 rounded-sm"
+              title="No contract addresses configured. Showing sample data."
             >
               Demo
             </span>
@@ -108,65 +118,72 @@ export function Hero() {
         </div>
 
         <HairlineDivider
-          ornament={<Asterism className="w-3 h-3 text-bronze-bright" />}
+          ornament={<Asterism className="w-3 h-3 text-gold-leaf" />}
           className="reveal mt-3"
         />
 
-        {/* Display title */}
+        {/* Display title with illuminated drop cap */}
         {hasKing ? (
           <h1
-            className="reveal-ink mt-10 font-display font-light text-parchment-soft text-balance"
+            className="reveal-ink mt-10 font-display font-medium text-parchment text-balance"
             style={{ animationDelay: '160ms' }}
           >
-            <span className="block italic text-stone text-2xl md:text-3xl mb-1 tracking-wide">
+            <span className="block font-body italic font-normal text-stone text-2xl md:text-3xl mb-2 tracking-wide">
               the
             </span>
-            <span className="block text-7xl md:text-8xl lg:text-[7rem] leading-[0.92] tracking-tight text-parchment">
-              {reignWord}{' '}
-              <span className="italic text-gold-pale">Reign</span>
+            <span className="block text-5xl sm:text-6xl md:text-7xl lg:text-[6.5rem] 2xl:text-[7.5rem] 3xl:text-[10rem] 4xl:text-[13rem] leading-[0.95] tracking-tight">
+              <Initial char={dropCapChar} size="0.95em" />
+              <span className="text-parchment">{reignWordTail}</span>{' '}
+              <span className="font-body italic font-medium text-gold-pale">
+                Reign
+              </span>
             </span>
-            <span className="block italic text-stone text-2xl md:text-3xl mt-2 tracking-wide">
+            <span className="block font-body italic font-normal text-stone text-2xl md:text-3xl mt-3 tracking-wide">
               of
             </span>
           </h1>
         ) : (
           <h1
-            className="reveal-ink mt-10 font-display font-light text-parchment-soft"
+            className="reveal-ink mt-10 font-display font-medium text-parchment"
             style={{ animationDelay: '160ms' }}
           >
-            <span className="block italic text-stone text-2xl md:text-3xl mb-1 tracking-wide">
+            <span className="block font-body italic font-normal text-stone text-2xl md:text-3xl mb-2 tracking-wide">
               the
             </span>
-            <span className="block text-7xl md:text-8xl lg:text-[7rem] leading-[0.92] tracking-tight text-parchment">
-              <span className="italic text-gold-pale">Throne</span> Vacant
+            <span className="block text-5xl sm:text-6xl md:text-7xl lg:text-[6.5rem] 2xl:text-[7.5rem] 3xl:text-[10rem] 4xl:text-[13rem] leading-[0.95] tracking-tight">
+              <Initial char="T" size="0.95em" />
+              <span className="font-body italic font-medium text-gold-pale">
+                hrone
+              </span>{' '}
+              <span className="text-parchment">Vacant</span>
             </span>
-            <span className="block italic text-stone text-xl md:text-2xl mt-3 tracking-wide">
+            <span className="block font-body italic font-normal text-stone text-xl md:text-2xl mt-3 tracking-wide">
               awaiting a sovereign
             </span>
           </h1>
         )}
 
-        {/* Engraved address tablet */}
+        {/* Codex address card */}
         {hasKing ? (
           <div
-            className="reveal-stamp mt-7 engraved rounded-sm px-6 py-5 relative overflow-hidden"
+            className="reveal-stamp mt-8 vellum-card rounded-sm px-6 py-5 relative overflow-hidden"
             style={{ animationDelay: '420ms' }}
           >
             <div
               aria-hidden
-              className="absolute inset-0 opacity-30 pointer-events-none"
+              className="absolute inset-0 opacity-40 pointer-events-none"
               style={{
                 background:
-                  'radial-gradient(circle at 20% 50%, rgba(245,165,36,0.12) 0%, transparent 55%)',
+                  'radial-gradient(circle at 18% 50%, rgba(74,108,199,0.18) 0%, transparent 55%)',
               }}
             />
-            <div className="absolute top-3 right-3 text-bronze-soft">
+            <div className="absolute top-3 right-3 text-gold-leaf opacity-80">
               <Crown className="w-5 h-5" />
             </div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright mb-2">
-              Engraved into stone
+            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold-leaf mb-2 relative">
+              Inscribed in the codex
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap relative">
               <div className="font-mono text-base md:text-lg text-parchment tnum shimmer-gold">
                 {formatAddressEngraved(king.currentKing)}
               </div>
@@ -174,12 +191,12 @@ export function Hero() {
                 type="button"
                 onClick={onCopy}
                 aria-label="Copy address"
-                className="ml-auto shrink-0 text-bronze-bright hover:text-gold text-[10px] font-mono uppercase tracking-[0.2em] transition-colors"
+                className="ml-auto shrink-0 text-gold-leaf hover:text-gold text-[10px] font-mono uppercase tracking-[0.2em] transition-colors px-2 py-1"
               >
                 {copied ? '✓ COPIED' : '⎘ COPY'}
               </button>
             </div>
-            <div className="mt-3 font-mono text-[10px] tracking-widest text-stone-soft">
+            <div className="mt-3 font-mono text-[10px] tracking-widest text-stone relative">
               Crowned at block{' '}
               <span className="tnum text-parchment-soft">
                 {formatInt(reignStartedAt)}
@@ -194,7 +211,7 @@ export function Hero() {
           </div>
         ) : (
           <div
-            className="reveal mt-7 engraved-inset rounded-sm px-6 py-6 font-body text-sm text-stone"
+            className="reveal mt-8 engraved-inset rounded-sm px-6 py-6 font-body text-base text-stone leading-relaxed"
             style={{ animationDelay: '420ms' }}
           >
             No reigning sovereign. Any buy above the threshold below claims the
@@ -202,9 +219,9 @@ export function Hero() {
           </div>
         )}
 
-        {/* Tribute + threshold stat strip */}
+        {/* Tribute + threshold stat strip — vellum cards */}
         <div
-          className="reveal mt-8 grid grid-cols-2 gap-px bg-bronze/50 rounded-sm overflow-hidden"
+          className="reveal mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 3xl:gap-5"
           style={{ animationDelay: '640ms' }}
         >
           <StatStrip
@@ -221,29 +238,53 @@ export function Hero() {
           />
         </div>
 
-        {/* Decay bar */}
+        {/* Decay bar — alarming when urgent */}
         <div
-          className="reveal mt-6"
+          className="reveal mt-7"
           style={{ animationDelay: '780ms' }}
         >
           <div className="flex items-baseline justify-between mb-2">
-            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-gold throb inline-block" />
-              Reign Decay
+            <div
+              className={`font-mono text-[10px] uppercase tracking-[0.3em] flex items-center gap-2 ${
+                isUrgent ? 'text-vermilion-bright' : 'text-gold-leaf'
+              }`}
+            >
+              <Hourglass
+                className={`w-3.5 h-3.5 ${
+                  isUrgent ? 'drain-pulse-urgent' : ''
+                }`}
+              />
+              <span
+                className={`w-1.5 h-1.5 rounded-full inline-block ${
+                  isUrgent
+                    ? 'bg-vermilion-bright throb-vermilion'
+                    : 'bg-gold throb'
+                }`}
+              />
+              {isUrgent ? 'Reign Failing' : 'Reign Decay'}
             </div>
-            <div className="font-mono text-sm text-parchment tnum drain-pulse">
+            <div
+              className={`font-mono text-sm tnum ${
+                isUrgent
+                  ? 'text-vermilion-bright drain-pulse-urgent'
+                  : 'text-parchment drain-pulse'
+              }`}
+            >
               {hasKing ? formatTime(secsLeft) : '—'}
             </div>
           </div>
-          <div className="engraved-inset rounded-sm h-3 overflow-hidden relative">
+          <div className="engraved-inset rounded-sm h-4 overflow-hidden relative">
             <div
-              className="absolute inset-y-0 left-0 transition-[width] duration-1000 ease-linear"
+              className={`absolute inset-y-0 left-0 transition-[width] duration-1000 ease-linear ${
+                isUrgent ? 'flicker' : ''
+              }`}
               style={{
                 width: `${hasKing ? remainingPct : 0}%`,
-                background:
-                  'linear-gradient(90deg, var(--color-flame) 0%, var(--color-gold) 60%, var(--color-gold-soft) 100%)',
+                background: isUrgent
+                  ? 'linear-gradient(90deg, var(--color-vermilion) 0%, var(--color-flame) 60%, var(--color-gold) 100%)'
+                  : 'linear-gradient(90deg, var(--color-flame) 0%, var(--color-gold) 60%, var(--color-gold-soft) 100%)',
                 boxShadow:
-                  '0 0 12px rgba(245,165,36,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
+                  '0 0 12px rgba(232,179,57,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
               }}
             />
             <div
@@ -251,7 +292,7 @@ export function Hero() {
               className="absolute inset-0"
               style={{
                 backgroundImage:
-                  'repeating-linear-gradient(90deg, transparent 0 9.95%, rgba(0,0,0,0.4) 9.95% 10%)',
+                  'repeating-linear-gradient(90deg, transparent 0 9.95%, rgba(0,0,0,0.45) 9.95% 10%)',
               }}
             />
           </div>
@@ -282,18 +323,18 @@ function StatStrip({
   accent: 'gold' | 'parchment';
 }) {
   return (
-    <div className="bg-vellum px-5 py-4">
-      <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright mb-2">
+    <div className="vellum-card rounded-sm px-5 py-4 3xl:px-7 3xl:py-6">
+      <div className="font-mono text-[10px] 3xl:text-xs uppercase tracking-[0.3em] text-gold-leaf mb-2">
         {label}
       </div>
       <div
-        className={`font-display text-4xl tnum ${
+        className={`font-display text-4xl 3xl:text-5xl 4xl:text-6xl tnum tracking-tight ${
           accent === 'gold' ? 'text-gold' : 'text-parchment'
         }`}
       >
         {value}
       </div>
-      <div className="font-mono text-[10px] tracking-wider text-stone-soft mt-1">
+      <div className="font-mono text-[10px] 3xl:text-xs tracking-wider text-stone mt-1">
         {foot}
       </div>
     </div>

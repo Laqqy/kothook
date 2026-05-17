@@ -6,7 +6,7 @@ import { KOTHTokenAbi, KingOfTheHillHookAbi } from '@/abis';
 import { mockStats } from '@/app/_components/mock-data';
 import { useContracts, useIsDeployed } from './use-contracts';
 
-const MAX_SUPPLY_WEI = parseEther('10000000');
+const MAX_SUPPLY_WEI = parseEther('1000000');
 
 export interface TokenStats {
   isDemo: boolean;

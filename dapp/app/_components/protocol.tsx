@@ -39,18 +39,18 @@ const RULES: { numeral: string; title: string; body: React.ReactNode }[] = [
     body: (
       <>
         If thou dost sell whilst crowned, the protocol{' '}
-        <span className="text-crimson">automatically dethrones thee</span>.
+        <span className="text-vermilion-bright">automatically dethrones thee</span>.
       </>
     ),
   },
   {
     numeral: 'V',
-    title: 'Forfeit Writ',
+    title: 'Reclaim Lost Tribute',
     body: (
       <>
         Twelve hours after dethroning, any keeper may{' '}
-        <span className="text-gold">forfeit thy unclaimed coffers</span> · 3%
-        tip; remainder is burned.
+        <span className="text-gold">reclaim thy unclaimed coffers</span> · 3%
+        keeper&apos;s share; remainder is burned.
       </>
     ),
   },
@@ -75,15 +75,15 @@ export function Protocol() {
       {/* Background sigil */}
       <div
         aria-hidden
-        className="absolute -right-12 -top-12 text-bronze-soft pointer-events-none"
+        className="absolute -right-12 -top-12 text-lapis pointer-events-none"
       >
-        <Sigil className="w-[420px] h-[420px] opacity-[0.07]" />
+        <Sigil className="w-[420px] h-[420px] opacity-[0.08]" />
       </div>
 
       <div className="relative">
         <HairlineDivider
           ornament={
-            <div className="flex items-center gap-3 text-bronze-bright">
+            <div className="flex items-center gap-3 text-gold-leaf">
               <Asterism className="w-3 h-3" />
               <span className="font-mono text-[10px] uppercase tracking-[0.35em]">
                 Protocol of Succession
@@ -93,17 +93,26 @@ export function Protocol() {
           }
         />
 
-        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-12 gap-y-8 max-w-5xl">
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-10 3xl:gap-x-14 3xl:gap-y-14 max-w-5xl 3xl:max-w-[88rem] 4xl:max-w-[112rem]">
           {RULES.map((rule) => (
             <article key={rule.numeral} className="flex gap-4">
-              <span className="font-display italic text-gold-pale text-4xl leading-none w-10 shrink-0 text-right">
+              <span
+                className="illuminated-initial shrink-0"
+                style={{
+                  fontSize: '1.05em',
+                  width: '2.6em',
+                  height: '2.6em',
+                  letterSpacing: '0.04em',
+                }}
+                aria-hidden
+              >
                 {rule.numeral}
               </span>
               <div>
-                <h3 className="font-display text-xl text-parchment mb-1.5 tracking-wide">
+                <h3 className="font-display text-xl 3xl:text-2xl 4xl:text-3xl text-parchment mb-1.5 tracking-[0.04em]">
                   {rule.title}
                 </h3>
-                <p className="font-body text-sm text-parchment-soft leading-relaxed">
+                <p className="font-body text-base 3xl:text-lg 4xl:text-xl text-parchment-soft leading-relaxed">
                   {rule.body}
                 </p>
               </div>

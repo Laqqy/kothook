@@ -1,5 +1,5 @@
 import { defineChain } from 'viem';
-import { mainnet } from 'viem/chains';
+import { mainnet, sepolia } from 'viem/chains';
 
 export const anvil = defineChain({
   id: 31337,
@@ -11,4 +11,4 @@ export const anvil = defineChain({
   testnet: true,
 });
 
-export { mainnet };
+export { mainnet, sepolia };

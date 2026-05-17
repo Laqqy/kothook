@@ -1,22 +1,47 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useBlockNumber, usePublicClient, useReadContracts } from 'wagmi';
+import {
+  useBlockNumber,
+  useChainId,
+  usePublicClient,
+  useReadContracts,
+} from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
-import type { Address } from 'viem';
+import { createPublicClient, http, type Address } from 'viem';
 import { parseEther } from 'viem';
+import { sepolia } from '@/lib/chains';
 import { KingOfTheHillHookAbi } from '@/abis';
 import { useContracts, useIsDeployed } from './use-contracts';
+
+/**
+ * Alchemy's free tier caps eth_getLogs at a 10-block window, which is useless
+ * for scanning history. PublicNode allows the full range. Use it as the
+ * dedicated "logs" RPC on Sepolia.
+ */
+const SEPOLIA_LOGS_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+
+function logsClientFor(chainId: number) {
+  if (chainId === sepolia.id) {
+    return createPublicClient({ chain: sepolia, transport: http(SEPOLIA_LOGS_RPC) });
+  }
+  return null;
+}
 
 const FORFEIT_BLOCKS = 3600n;
 const KEEPER_TIP_BPS = 300n;
 
+export type DethronedStatus = 'locked' | 'forfeitable' | 'released';
+
 export interface DethronedEntry {
   king: Address;
-  earningsWei: bigint;
+  /** Earnings recorded at dethrone time (from event). Stays constant even after claim/forfeit. */
+  earningsAtDethroneWei: bigint;
+  /** Current remaining balance in the hook. 0 means already claimed/forfeited. */
+  remainingWei: bigint;
   dethronedAt: bigint;
   blocksUntilForfeit: bigint;
-  isForfeitable: boolean;
+  status: DethronedStatus;
   keeperTipWei: bigint;
   toBurnWei: bigint;
   /** Reason hash from KingDethroned event — kept opaque for now. */
@@ -31,20 +56,23 @@ export interface ThroneRoomState {
 }
 
 export function useThroneRoom(): ThroneRoomState {
-  const client = usePublicClient();
+  const wagmiClient = usePublicClient();
+  const chainId = useChainId();
   const { hook } = useContracts();
   const isDeployed = useIsDeployed();
+  // Dedicated logs RPC (PublicNode) for chains where Alchemy free tier is too
+  // restrictive; fall back to the wagmi client elsewhere.
+  const client = logsClientFor(chainId) ?? wagmiClient;
 
   const blockQ = useBlockNumber({
     watch: { enabled: isDeployed, pollingInterval: 12_000 },
     query: { enabled: isDeployed },
   });
 
-  // Fetch all KingDethroned events from genesis.
-  // TODO: For mainnet, replace with a real indexer. Anvil + small windows
-  // make this practical for Phase 1.
+  // Scan the full chain via the dedicated logs RPC. Phase 1 only — for a
+  // mainnet deploy this should move to a proper indexer.
   const eventsQuery = useQuery({
-    queryKey: ['throne-events', hook, isDeployed],
+    queryKey: ['throne-events', hook, isDeployed, chainId],
     queryFn: async () => {
       if (!client || !isDeployed) return [];
       const logs = await client.getContractEvents({
@@ -101,6 +129,16 @@ export function useThroneRoom(): ThroneRoomState {
 
   const blockNumber = blockQ.data ?? 0n;
 
+  // Map king → earnings at dethrone time from event payload.
+  const earningsByKing = new Map<Address, bigint>();
+  if (eventsQuery.data) {
+    for (const ev of eventsQuery.data) {
+      const k = ev.args.king as Address | undefined;
+      const earned = ev.args.totalEarned as bigint | undefined;
+      if (k && earned !== undefined) earningsByKing.set(k, earned);
+    }
+  }
+
   const entries: DethronedEntry[] = uniqueKings.flatMap((king, idx) => {
     const balRes = balanceReads.data?.[idx * 2];
     const deRes = balanceReads.data?.[idx * 2 + 1];
@@ -112,24 +150,32 @@ export function useThroneRoom(): ThroneRoomState {
     )
       return [];
 
-    const balance = balRes.result as bigint;
+    const remaining = balRes.result as bigint;
     const dethronedAt = deRes.result as bigint;
-    if (balance === 0n || dethronedAt === 0n) return [];
+    if (dethronedAt === 0n) return [];
 
+    const earningsAtDethrone = earningsByKing.get(king) ?? remaining;
     const deadline = dethronedAt + FORFEIT_BLOCKS;
-    const isForfeitable = blockNumber >= deadline;
-    const blocksUntilForfeit = isForfeitable ? 0n : deadline - blockNumber;
-    const tip = (balance * KEEPER_TIP_BPS) / 10_000n;
+    const tip = (remaining * KEEPER_TIP_BPS) / 10_000n;
+
+    let status: DethronedStatus;
+    if (remaining === 0n) status = 'released';
+    else if (blockNumber >= deadline) status = 'forfeitable';
+    else status = 'locked';
+
+    const blocksUntilForfeit =
+      status === 'locked' ? deadline - blockNumber : 0n;
 
     return [
       {
         king,
-        earningsWei: balance,
+        earningsAtDethroneWei: earningsAtDethrone,
+        remainingWei: remaining,
         dethronedAt,
         blocksUntilForfeit,
-        isForfeitable,
+        status,
         keeperTipWei: tip,
-        toBurnWei: balance - tip,
+        toBurnWei: remaining - tip,
         reasonHash: null,
       },
     ];
@@ -154,6 +200,8 @@ function demoState(): ThroneRoomState {
     king: Address;
     earningsETH: string;
     dethronedAt: bigint;
+    /** If true: balance is 0 — already claimed or forfeited. */
+    released?: boolean;
   }> = [
     {
       king: '0x9b3c8a1f7d24e9028ab51fae6c802b8c4ad724ff' as Address,
@@ -174,6 +222,7 @@ function demoState(): ThroneRoomState {
       king: '0x18a47c2e9f5b3d8a1c604f7b9e2a5c8d3e6f1a72' as Address,
       earningsETH: '7.842',
       dethronedAt: 18_440_120n,
+      released: true,
     },
   ];
 
@@ -181,18 +230,23 @@ function demoState(): ThroneRoomState {
     isDemo: true,
     isLoading: false,
     blockNumber,
-    entries: raw.map(({ king, earningsETH, dethronedAt }) => {
+    entries: raw.map(({ king, earningsETH, dethronedAt, released }) => {
       const wei = parseEther(earningsETH);
       const deadline = dethronedAt + FORFEIT_BLOCKS;
-      const isForfeitable = blockNumber >= deadline;
-      const blocksUntilForfeit = isForfeitable ? 0n : deadline - blockNumber;
       const tip = (wei * KEEPER_TIP_BPS) / 10_000n;
+      let status: DethronedStatus;
+      if (released) status = 'released';
+      else if (blockNumber >= deadline) status = 'forfeitable';
+      else status = 'locked';
+      const blocksUntilForfeit =
+        status === 'locked' ? deadline - blockNumber : 0n;
       return {
         king,
-        earningsWei: wei,
+        earningsAtDethroneWei: wei,
+        remainingWei: released ? 0n : wei,
         dethronedAt,
         blocksUntilForfeit,
-        isForfeitable,
+        status,
         keeperTipWei: tip,
         toBurnWei: wei - tip,
         reasonHash: null,

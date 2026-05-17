@@ -25,70 +25,75 @@ import {
 export function ThroneRoom() {
   const hasMounted = useHasMounted();
   const room = useThroneRoom();
-  const eligibleCount = room.entries.filter((e) => e.isForfeitable).length;
+  const eligibleCount = room.entries.filter(
+    (e) => e.status === 'forfeitable',
+  ).length;
+  const releasedCount = room.entries.filter(
+    (e) => e.status === 'released',
+  ).length;
   const totalLocked = room.entries.reduce(
-    (acc, e) => acc + e.earningsWei,
+    (acc, e) => acc + e.remainingWei,
     0n,
   );
 
   return (
     <section className="relative">
       {/* Heading */}
-      <div className="reveal flex items-center gap-3 text-bronze-bright text-[11px] font-mono uppercase tracking-[0.35em]">
-        <span>Forfeit Writ</span>
-        <span className="text-bronze">·</span>
+      <div className="reveal flex items-center gap-3 text-gold-leaf text-[11px] font-mono uppercase tracking-[0.35em]">
+        <span>Reclaim Lost Tribute</span>
+        <span className="text-bronze-bright">·</span>
         <span className="tnum text-stone">
           Block {hasMounted ? formatInt(room.blockNumber) : '—'}
         </span>
         {hasMounted && room.isDemo && (
-          <span className="ml-auto text-[10px] uppercase tracking-[0.3em] text-crimson border border-crimson/40 px-2 py-0.5 rounded-sm">
+          <span className="ml-auto text-[10px] uppercase tracking-[0.3em] text-vermilion-bright border border-vermilion/50 px-2 py-0.5 rounded-sm">
             Demo
           </span>
         )}
       </div>
       <HairlineDivider
-        ornament={<Asterism className="w-3 h-3 text-bronze-bright" />}
+        ornament={<Asterism className="w-3 h-3 text-gold-leaf" />}
         className="reveal mt-3"
       />
 
       <h1
-        className="reveal-ink mt-10 font-display font-light text-balance"
+        className="reveal-ink mt-10 font-display font-medium text-balance"
         style={{ animationDelay: '120ms' }}
       >
-        <span className="block italic text-stone text-xl md:text-2xl mb-1 tracking-wide">
+        <span className="block font-body italic font-normal text-stone text-xl md:text-2xl mb-1 tracking-wide">
           The
         </span>
-        <span className="block text-6xl md:text-7xl leading-[0.95] tracking-tight text-parchment">
-          Throne <span className="italic text-gold-pale">Room</span>
+        <span className="block text-5xl sm:text-6xl md:text-7xl 2xl:text-8xl 3xl:text-[8.5rem] 4xl:text-[11rem] leading-[0.95] tracking-tight text-parchment">
+          Throne <span className="font-body italic font-medium text-gold-pale">Room</span>
         </span>
         <span className="block text-stone text-base md:text-lg max-w-2xl mt-4 tracking-wide leading-relaxed font-body">
           The vaults of all deposed sovereigns. Twelve hours after a dethrone,
-          any keeper may bring the writ of forfeit — claiming{' '}
-          <span className="text-gold">3%</span> as tip whilst the remainder is{' '}
-          <span className="text-gold">cast to ash</span>.
+          any keeper may reclaim the lost tribute — taking{' '}
+          <span className="text-gold">3%</span> as keeper&apos;s share whilst
+          the remainder is <span className="text-gold">cast to ash</span>.
         </span>
       </h1>
 
       {/* Top stats */}
-      <div className="reveal mt-10 grid grid-cols-1 md:grid-cols-3 gap-px bg-bronze/60 rounded-sm overflow-hidden">
+      <div className="reveal mt-10 grid grid-cols-1 md:grid-cols-3 gap-3 3xl:gap-5">
         <Stat
           icon={<Crown className="w-4 h-4" />}
           label="Deposed Vaults"
           value={String(room.entries.length)}
-          tail={`${eligibleCount} ready to forfeit`}
+          tail={`${eligibleCount} ready · ${releasedCount} released`}
         />
         <Stat
           icon={<Fleur className="w-4 h-4" />}
           label="ETH Locked"
           value={`${formatWeiETH(totalLocked, 3)} Ξ`}
-          tail="Across all dethroned kings"
+          tail="Across pending vaults"
           accent
         />
         <Stat
           icon={<Asterism className="w-4 h-4" />}
-          label="Forfeit Window"
+          label="Reclaim Window"
           value="3,600"
-          tail="Blocks · 3% keeper tip"
+          tail="Blocks · 3% keeper share"
         />
       </div>
 
@@ -101,7 +106,7 @@ export function ThroneRoom() {
             No coffers held. The realm is settled.
           </EmptyMessage>
         ) : (
-          <ul className="space-y-px bg-bronze/60 rounded-sm overflow-hidden">
+          <ul className="space-y-3">
             {room.entries.map((entry, i) => (
               <DethronedRow key={entry.king} entry={entry} index={i} />
             ))}
@@ -121,6 +126,7 @@ function DethronedRow({
 }) {
   const blocksAgo = useBlocksAgo(entry.dethronedAt);
   const [copied, setCopied] = useState(false);
+  const released = entry.status === 'released';
 
   const onCopy = () => {
     void navigator.clipboard.writeText(entry.king);
@@ -128,22 +134,40 @@ function DethronedRow({
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const dotColor = {
+    locked: 'bg-gold-leaf',
+    forfeitable: 'bg-gold',
+    released: 'bg-stone-soft',
+  }[entry.status];
+
+  const labelColor = released
+    ? 'text-stone-soft'
+    : 'text-gold-leaf';
+
   return (
     <li
-      className="reveal bg-ash hover:bg-vellum-soft transition-colors px-5 py-5 grid grid-cols-1 md:grid-cols-12 gap-4 items-center"
+      className={`reveal vellum-card rounded-sm transition-all px-5 py-5 grid grid-cols-1 md:grid-cols-12 gap-4 items-center ${
+        released ? 'opacity-55 grayscale-[0.25]' : 'hover:border-gold-leaf/50'
+      }`}
       style={{ animationDelay: `${index * 80 + 200}ms` }}
     >
       {/* Address */}
       <div className="md:col-span-3 flex items-center gap-3 min-w-0">
-        <span className="w-2 h-2 rounded-sm bg-bronze-bright shrink-0" />
+        <span className={`w-2 h-2 rounded-sm shrink-0 ${dotColor}`} />
         <div className="min-w-0">
-          <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright">
-            Deposed
+          <div
+            className={`font-mono text-[10px] uppercase tracking-[0.3em] ${labelColor}`}
+          >
+            {released ? 'Released' : 'Deposed'}
           </div>
           <button
             type="button"
             onClick={onCopy}
-            className="block font-mono text-sm text-parchment hover:text-gold transition-colors tnum truncate text-left w-full"
+            className={`block font-mono text-sm tnum truncate text-left w-full transition-colors ${
+              released
+                ? 'text-stone hover:text-stone-soft'
+                : 'text-parchment hover:text-gold'
+            }`}
             title={entry.king}
           >
             {copied ? '✓ copied' : shortAddress(entry.king, 6, 4)}
@@ -153,21 +177,36 @@ function DethronedRow({
 
       {/* Balance */}
       <div className="md:col-span-2">
-        <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright">
+        <div
+          className={`font-mono text-[10px] uppercase tracking-[0.3em] ${labelColor}`}
+        >
           Coffers
         </div>
-        <div className="font-display text-2xl tnum text-gold">
-          {formatWeiETH(entry.earningsWei, 4)}{' '}
-          <span className="text-bronze-bright text-base">Ξ</span>
-        </div>
+        {released ? (
+          <div className="font-display text-2xl tnum text-stone line-through decoration-stone/40">
+            {formatWeiETH(entry.earningsAtDethroneWei, 4)}{' '}
+            <span className="text-stone-soft text-base">Ξ</span>
+          </div>
+        ) : (
+          <div className="font-display text-2xl tnum text-gold">
+            {formatWeiETH(entry.remainingWei, 4)}{' '}
+            <span className="text-gold-leaf text-base">Ξ</span>
+          </div>
+        )}
       </div>
 
       {/* When */}
       <div className="md:col-span-2">
-        <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright">
+        <div
+          className={`font-mono text-[10px] uppercase tracking-[0.3em] ${labelColor}`}
+        >
           Dethroned
         </div>
-        <div className="font-mono text-sm text-parchment tnum">
+        <div
+          className={`font-mono text-sm tnum ${
+            released ? 'text-stone' : 'text-parchment'
+          }`}
+        >
           {blocksAgo > 0n ? `${formatInt(blocksAgo)} blocks ago` : 'this block'}
         </div>
         <div className="font-mono text-[10px] text-stone-soft tnum">
@@ -175,41 +214,64 @@ function DethronedRow({
         </div>
       </div>
 
-      {/* Countdown */}
+      {/* Countdown / status */}
       <div className="md:col-span-2">
-        <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-bronze-bright">
-          Writ
+        <div
+          className={`font-mono text-[10px] uppercase tracking-[0.3em] ${labelColor}`}
+        >
+          Status
         </div>
-        {entry.isForfeitable ? (
-          <div className="font-display text-lg text-gold flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-gold throb inline-block" />
-            Ready
-          </div>
+        {entry.status === 'forfeitable' ? (
+          <>
+            <div className="font-display text-lg text-gold flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-gold throb inline-block" />
+              Ready
+            </div>
+            <div className="font-mono text-[10px] text-stone">
+              Keeper share · {formatWeiETH(entry.keeperTipWei, 4)} Ξ
+            </div>
+          </>
+        ) : entry.status === 'locked' ? (
+          <>
+            <div className="font-mono text-sm text-parchment tnum">
+              {formatInt(entry.blocksUntilForfeit)} blocks
+            </div>
+            <div className="font-mono text-[10px] text-stone">
+              Keeper share · {formatWeiETH(entry.keeperTipWei, 4)} Ξ
+            </div>
+          </>
         ) : (
-          <div className="font-mono text-sm text-parchment tnum">
-            {formatInt(entry.blocksUntilForfeit)} blocks
-          </div>
+          <>
+            <div className="font-display text-lg text-stone">Settled</div>
+            <div className="font-mono text-[10px] text-stone-soft">
+              Released to bearer
+            </div>
+          </>
         )}
-        <div className="font-mono text-[10px] text-stone-soft">
-          Keeper tip · {formatWeiETH(entry.keeperTipWei, 4)} Ξ
-        </div>
       </div>
 
       {/* Action */}
       <div className="md:col-span-3 flex justify-end">
-        <ForfeitButton entry={entry} />
+        {released ? (
+          <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-stone border border-bronze/40 px-3 py-2 rounded-sm">
+            · settled ·
+          </span>
+        ) : (
+          <ReclaimButton entry={entry} />
+        )}
       </div>
     </li>
   );
 }
 
-function ForfeitButton({ entry }: { entry: DethronedEntry }) {
+function ReclaimButton({ entry }: { entry: DethronedEntry }) {
   const { isConnected } = useAccount();
   const isDeployed = useIsDeployed();
   const { hook } = useContracts();
   const { writeContract, isPending, data: txHash } = useWriteContract();
 
-  const callable = isConnected && isDeployed && entry.isForfeitable;
+  const reclaimable = entry.status === 'forfeitable';
+  const callable = isConnected && isDeployed && reclaimable;
 
   const onClick = () => {
     if (!callable) return;
@@ -221,11 +283,11 @@ function ForfeitButton({ entry }: { entry: DethronedEntry }) {
     });
   };
 
-  let label = 'Forfeit';
-  if (!isDeployed) label = 'Forfeit (demo)';
-  else if (!isConnected) label = 'Connect to forfeit';
-  else if (!entry.isForfeitable) label = 'Locked';
-  if (isPending) label = 'Sealing writ…';
+  let label = 'Reclaim';
+  if (!isDeployed) label = 'Reclaim (demo)';
+  else if (!isConnected) label = 'Connect to reclaim';
+  else if (!reclaimable) label = 'Locked';
+  if (isPending) label = 'Sealing…';
   if (txHash && !isPending) label = '✓ Submitted';
 
   return (
@@ -233,9 +295,9 @@ function ForfeitButton({ entry }: { entry: DethronedEntry }) {
       type="button"
       onClick={onClick}
       disabled={!callable || isPending}
-      className={`font-display tracking-wide uppercase text-base px-5 py-2.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed ${
-        entry.isForfeitable
-          ? 'bg-gold text-ink hover:bg-flame border border-gold-soft disabled:opacity-50 disabled:hover:bg-gold'
+      className={`font-display tracking-[0.1em] uppercase text-base px-5 py-2.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed min-h-[44px] ${
+        reclaimable
+          ? 'bg-gold text-ink hover:bg-flame border border-gold-soft shadow-[0_0_0_1px_rgba(232,179,57,0.4),0_0_18px_rgba(232,179,57,0.3)] disabled:opacity-50 disabled:hover:bg-gold'
           : 'bg-bronze/40 text-stone border border-bronze disabled:opacity-70'
       }`}
     >
@@ -258,21 +320,21 @@ function Stat({
   accent?: boolean;
 }) {
   return (
-    <div className="bg-ash px-6 py-6">
-      <div className="flex items-center gap-2.5 mb-3 text-bronze-bright">
+    <div className="vellum-card rounded-sm px-6 py-6 3xl:px-8 3xl:py-8">
+      <div className="flex items-center gap-2.5 mb-3 text-gold-leaf">
         {icon}
-        <span className="font-mono text-[10px] uppercase tracking-[0.32em]">
+        <span className="font-mono text-[10px] 3xl:text-xs uppercase tracking-[0.32em]">
           {label}
         </span>
       </div>
       <div
-        className={`font-display tnum text-4xl leading-none ${
+        className={`font-display tnum text-4xl 3xl:text-5xl 4xl:text-6xl leading-none tracking-tight ${
           accent ? 'text-gold' : 'text-parchment'
         }`}
       >
         {value}
       </div>
-      <div className="mt-2 font-mono text-[11px] text-stone-soft tracking-wide">
+      <div className="mt-2 font-mono text-[11px] 3xl:text-xs text-stone tracking-wide">
         {tail}
       </div>
     </div>

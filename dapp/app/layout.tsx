@@ -1,20 +1,20 @@
 import type { Metadata } from 'next';
-import { Newsreader, Manrope, JetBrains_Mono } from 'next/font/google';
+import { Cinzel, EB_Garamond, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 
-const newsreader = Newsreader({
-  variable: '--font-newsreader',
+const cinzel = Cinzel({
+  variable: '--font-cinzel',
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  style: ['normal', 'italic'],
+  weight: ['400', '500', '600', '700', '800'],
   display: 'swap',
 });
 
-const manrope = Manrope({
-  variable: '--font-manrope',
+const garamond = EB_Garamond({
+  variable: '--font-garamond',
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
   display: 'swap',
 });
 
@@ -26,7 +26,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'King of the Hill — $KOTH',
+  title: 'King of the Hill | $KOTH',
   description:
     'A passive on-chain throne game. Buy $KOTH above the threshold to crown yourself and earn 2% ETH on every swap until dethroned.',
 };
@@ -39,7 +39,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${newsreader.variable} ${manrope.variable} ${jetbrains.variable} h-full antialiased`}
+      className={`${cinzel.variable} ${garamond.variable} ${jetbrains.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-ink text-parchment">
         <Providers>{children}</Providers>

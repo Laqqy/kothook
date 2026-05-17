@@ -1,28 +1,28 @@
 import { Header } from '../_components/header';
 import { Marquee } from '../_components/marquee';
-import { ThroneRoom } from './_components/throne-room';
+import { Chronicle } from './_components/chronicle';
 
 export const metadata = {
-  title: 'Throne Room | King of the Hill',
+  title: 'Chronicle | King of the Hill',
   description:
-    'Deposed sovereigns and their unclaimed coffers. After 12h any keeper may reclaim on their behalf — 3% keeper share, 97% burned to KOTH.',
+    'The full chronicle of every reign — kings ascended, kings fallen, NFTs minted, fortunes claimed.',
 };
 
-export default function ThroneRoomPage() {
+export default function ChroniclePage() {
   return (
     <div className="relative grain min-h-screen flex flex-col">
       <Header />
       <main className="relative z-10 flex-1">
         <div className="mx-auto max-w-7xl 2xl:max-w-[88rem] 3xl:max-w-[124rem] 4xl:max-w-[168rem] px-6 2xl:px-10 3xl:px-12 4xl:px-16 pt-12 pb-16">
-          <ThroneRoom />
+          <Chronicle />
         </div>
         <Marquee />
-        <footer className="mx-auto max-w-7xl 2xl:max-w-[88rem] 3xl:max-w-[124rem] 4xl:max-w-[168rem] px-6 2xl:px-10 3xl:px-12 4xl:px-16 py-10 text-stone flex justify-between items-center">
+        <footer className="mx-auto max-w-7xl 2xl:max-w-[88rem] 3xl:max-w-[124rem] 4xl:max-w-[168rem] px-6 2xl:px-10 3xl:px-12 4xl:px-16 py-10 text-stone-soft flex justify-between items-center">
           <span className="font-mono text-[10px] uppercase tracking-[0.3em]">
-            $KOTH · Throne Room
+            $KOTH · Chronicle
           </span>
           <span className="font-mono text-[10px] uppercase tracking-[0.3em]">
-            Reclaim window · 3,600 blocks · ~12h
+            Every reign · forever on-chain
           </span>
         </footer>
       </main>

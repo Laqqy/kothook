@@ -1,8 +1,8 @@
 const PHRASES = [
   'Succession requires tribute above the decayed record × 1.03',
   'Dump protection · selling whilst crowned triggers automatic dethrone',
-  'Forfeit writ · unclaimed coffers cast to ash after twelve hours',
-  '3% keeper tip on forfeited treasuries',
+  'Reclaim lost tribute · unclaimed coffers cast to ash after twelve hours',
+  '3% keeper share on reclaimed treasuries',
   '2% of every swap flows to the reigning sovereign',
   '5% royalty on every Chronicle Scroll resale',
   'Chronicle Soul · soulbound testimony of every overthrow',

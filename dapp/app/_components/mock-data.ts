@@ -16,10 +16,10 @@ export const mockKing = {
 };
 
 export const mockStats = {
-  totalSupplyKOTH: 9_857_153,
-  totalSupplyMaxKOTH: 10_000_000,
+  totalSupplyKOTH: 985_715,
+  totalSupplyMaxKOTH: 1_000_000,
   treasuryETH: 47.21,
-  burnedKOTH: 142_847,
+  burnedKOTH: 14_285,
 };
 
 export const mockPricing = {
