@@ -10,28 +10,57 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { createPublicClient, http, type Address } from 'viem';
 import { parseEther } from 'viem';
-import { sepolia } from '@/lib/chains';
+import { mainnet, sepolia } from '@/lib/chains';
 import { KingOfTheHillHookAbi } from '@/abis';
 import { useContracts, useIsDeployed } from './use-contracts';
+import { useKing } from './use-king';
 
 /**
- * Alchemy's free tier caps eth_getLogs at a 10-block window, which is useless
- * for scanning history. PublicNode allows the full range. Use it as the
- * dedicated "logs" RPC on Sepolia.
+ * Alchemy's free tier caps eth_getLogs at a 10-block window. Public providers
+ * (PublicNode for Sepolia, Llamarpc for mainnet) allow the full range. Override
+ * via `NEXT_PUBLIC_<NETWORK>_LOGS_RPC` in production — a paid Alchemy/Infura
+ * URL with eth_getLogs enabled is preferred under load.
  */
-const SEPOLIA_LOGS_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+const SEPOLIA_LOGS_RPC =
+  process.env.NEXT_PUBLIC_SEPOLIA_LOGS_RPC ?? 'https://ethereum-sepolia-rpc.publicnode.com';
+const MAINNET_LOGS_RPC =
+  process.env.NEXT_PUBLIC_MAINNET_LOGS_RPC ?? 'https://eth.llamarpc.com';
+
+/**
+ * Block from which to start scanning hook events. On mainnet `'earliest'` would
+ * walk ~21M blocks and time out on any free-tier provider, so we anchor the
+ * scan at the deploy block.
+ */
+const SEPOLIA_DEPLOY_BLOCK =
+  process.env.NEXT_PUBLIC_SEPOLIA_DEPLOY_BLOCK
+    ? BigInt(process.env.NEXT_PUBLIC_SEPOLIA_DEPLOY_BLOCK)
+    : 0n;
+const MAINNET_DEPLOY_BLOCK =
+  process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK
+    ? BigInt(process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK)
+    : 0n;
 
 function logsClientFor(chainId: number) {
+  if (chainId === mainnet.id) {
+    return createPublicClient({ chain: mainnet, transport: http(MAINNET_LOGS_RPC) });
+  }
   if (chainId === sepolia.id) {
     return createPublicClient({ chain: sepolia, transport: http(SEPOLIA_LOGS_RPC) });
   }
   return null;
 }
 
+function deployBlockFor(chainId: number): bigint | 'earliest' {
+  if (chainId === mainnet.id) return MAINNET_DEPLOY_BLOCK === 0n ? 'earliest' : MAINNET_DEPLOY_BLOCK;
+  if (chainId === sepolia.id) return SEPOLIA_DEPLOY_BLOCK === 0n ? 'earliest' : SEPOLIA_DEPLOY_BLOCK;
+  return 'earliest';
+}
+
 const FORFEIT_BLOCKS = 3600n;
 const KEEPER_TIP_BPS = 300n;
+const ZERO_ADDR = '0x0000000000000000000000000000000000000000' as Address;
 
-export type DethronedStatus = 'locked' | 'forfeitable' | 'released';
+export type DethronedStatus = 'reigning' | 'locked' | 'forfeitable' | 'released';
 
 export interface DethronedEntry {
   king: Address;
@@ -60,6 +89,13 @@ export function useThroneRoom(): ThroneRoomState {
   const chainId = useChainId();
   const { hook } = useContracts();
   const isDeployed = useIsDeployed();
+  // Active reign — pulled from the same useKing hook the hero/swap-widget use,
+  // so all surfaces share the same poll cadence and state.
+  const king = useKing();
+  const active = {
+    king: king.currentKing,
+    balance: king.kingEarningsWei,
+  };
   // Dedicated logs RPC (PublicNode) for chains where Alchemy free tier is too
   // restrictive; fall back to the wagmi client elsewhere.
   const client = logsClientFor(chainId) ?? wagmiClient;
@@ -69,17 +105,19 @@ export function useThroneRoom(): ThroneRoomState {
     query: { enabled: isDeployed },
   });
 
-  // Scan the full chain via the dedicated logs RPC. Phase 1 only — for a
-  // mainnet deploy this should move to a proper indexer.
+  // Scan from the deploy block (env-configured) forward. Phase 1 only — for
+  // sustained mainnet load this should move to a proper indexer (The Graph,
+  // Goldsky, custom subgraph) once dethrone-event volume grows.
+  const fromBlock = deployBlockFor(chainId);
   const eventsQuery = useQuery({
-    queryKey: ['throne-events', hook, isDeployed, chainId],
+    queryKey: ['throne-events', hook, isDeployed, chainId, fromBlock.toString()],
     queryFn: async () => {
       if (!client || !isDeployed) return [];
       const logs = await client.getContractEvents({
         address: hook,
         abi: KingOfTheHillHookAbi,
         eventName: 'KingDethroned',
-        fromBlock: 'earliest',
+        fromBlock,
         toBlock: 'latest',
       });
       return logs;
@@ -185,6 +223,40 @@ export function useThroneRoom(): ThroneRoomState {
   entries.sort((a, b) =>
     a.dethronedAt < b.dethronedAt ? 1 : a.dethronedAt > b.dethronedAt ? -1 : 0,
   );
+
+  // Prepend the actively reigning king so the page shows every wallet that
+  // currently has a coffer balance — past and present. The active row has no
+  // forfeit timer (dethronedAt = 0); throne-room.tsx renders it as a
+  // "Reigning" status without a Reclaim button. We show the active king even
+  // when their balance is 0 (just crowned, no swaps yet) — the page is
+  // meant to reflect *who* currently holds a throne, not just who has fees.
+  if (active.king !== ZERO_ADDR) {
+    // Drop any duplicate dethroned entry for the same address (the king might
+    // have been previously dethroned and resurrected — we only want the live
+    // reign card on this list).
+    const filtered = entries.filter(
+      (e) => e.king.toLowerCase() !== active.king.toLowerCase(),
+    );
+    return {
+      isDemo: false,
+      isLoading: eventsQuery.isLoading || balanceReads.isLoading,
+      blockNumber,
+      entries: [
+        {
+          king: active.king,
+          earningsAtDethroneWei: active.balance,
+          remainingWei: active.balance,
+          dethronedAt: 0n,
+          blocksUntilForfeit: 0n,
+          status: 'reigning' as DethronedStatus,
+          keeperTipWei: 0n,
+          toBurnWei: 0n,
+          reasonHash: null,
+        },
+        ...filtered,
+      ],
+    };
+  }
 
   return {
     isDemo: false,

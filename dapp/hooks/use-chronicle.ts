@@ -9,7 +9,7 @@ import {
 } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
 import { createPublicClient, http, type Address } from 'viem';
-import { sepolia } from '@/lib/chains';
+import { mainnet, sepolia } from '@/lib/chains';
 import {
   ChronicleSoulAbi,
   ChronicleScrollAbi,
@@ -17,12 +17,37 @@ import {
 } from '@/abis';
 import { useContracts, useIsDeployed } from './use-contracts';
 
-const SEPOLIA_LOGS_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+// Logs RPC — override via env in production. See use-throne-room.ts for the
+// same pattern. Anchoring to the deploy block keeps mainnet eth_getLogs
+// requests inside provider limits.
+const SEPOLIA_LOGS_RPC =
+  process.env.NEXT_PUBLIC_SEPOLIA_LOGS_RPC ?? 'https://ethereum-sepolia-rpc.publicnode.com';
+const MAINNET_LOGS_RPC =
+  process.env.NEXT_PUBLIC_MAINNET_LOGS_RPC ?? 'https://eth.llamarpc.com';
+
+const SEPOLIA_DEPLOY_BLOCK =
+  process.env.NEXT_PUBLIC_SEPOLIA_DEPLOY_BLOCK
+    ? BigInt(process.env.NEXT_PUBLIC_SEPOLIA_DEPLOY_BLOCK)
+    : 0n;
+const MAINNET_DEPLOY_BLOCK =
+  process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK
+    ? BigInt(process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK)
+    : 0n;
+
 function logsClientFor(chainId: number) {
+  if (chainId === mainnet.id) {
+    return createPublicClient({ chain: mainnet, transport: http(MAINNET_LOGS_RPC) });
+  }
   if (chainId === sepolia.id) {
     return createPublicClient({ chain: sepolia, transport: http(SEPOLIA_LOGS_RPC) });
   }
   return null;
+}
+
+function deployBlockFor(chainId: number): bigint | 'earliest' {
+  if (chainId === mainnet.id) return MAINNET_DEPLOY_BLOCK === 0n ? 'earliest' : MAINNET_DEPLOY_BLOCK;
+  if (chainId === sepolia.id) return SEPOLIA_DEPLOY_BLOCK === 0n ? 'earliest' : SEPOLIA_DEPLOY_BLOCK;
+  return 'earliest';
 }
 
 export type ReignReason = 'OVERTHROWN' | 'DUMP' | 'FORFEIT' | 'UNKNOWN';
@@ -204,8 +229,9 @@ export function useChronicle(): ChronicleState {
   }, [past, balanceReads.data]);
 
   // Best-effort: fetch the start block of the active king from NewKing event.
+  const fromBlock = deployBlockFor(chainId);
   const activeStart = useQuery({
-    queryKey: ['chronicle-active-start', currentKing, hook, chainId],
+    queryKey: ['chronicle-active-start', currentKing, hook, chainId, fromBlock.toString()],
     queryFn: async () => {
       if (!client || currentKing === '0x0000000000000000000000000000000000000000')
         return 0n;
@@ -213,7 +239,7 @@ export function useChronicle(): ChronicleState {
         address: hook,
         abi: KingOfTheHillHookAbi,
         eventName: 'NewKing',
-        fromBlock: 'earliest',
+        fromBlock,
         toBlock: 'latest',
       });
       // Pick the most recent NewKing for this king.

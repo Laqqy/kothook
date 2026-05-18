@@ -29,9 +29,15 @@ const FALLBACK_KOTH_PER_ETH = mockPricing.kothPerEth;
 
 const HOLD_MS = 750;
 
+// Slippage tolerance — user-selectable. We submit minOut = quote × (1 - slip).
+// We never submit with minOut = 0; without a live quote the button is disabled.
+const SLIPPAGE_PRESETS_BPS: readonly number[] = [50, 100, 300] as const; // 0.5% / 1% / 3%
+const DEFAULT_SLIPPAGE_BPS = 100;
+
 export function SwapWidget() {
   const [mode, setMode] = useState<Mode>('acquire');
   const [amount, setAmount] = useState('');
+  const [slippageBps, setSlippageBps] = useState<number>(DEFAULT_SLIPPAGE_BPS);
 
   const { address, isConnected } = useAccount();
   const isDeployed = useIsDeployed();
@@ -50,6 +56,14 @@ export function SwapWidget() {
   }, [amount, numericAmount]);
 
   const quote = useQuote(inputWei, mode === 'acquire');
+
+  // Slippage-protected minimum output for the on-chain swap. Computed only
+  // when a live quote is available so we never submit a tx with minOut = 0.
+  const minOutWei = useMemo(() => {
+    if (!quote.isQuoted || quote.amountOutWei <= 0n) return 0n;
+    return (quote.amountOutWei * BigInt(10_000 - slippageBps)) / 10_000n;
+  }, [quote.isQuoted, quote.amountOutWei, slippageBps]);
+  const hasQuote = quote.isQuoted && minOutWei > 0n;
 
   const receive = useMemo(() => {
     if (numericAmount <= 0) return 0;
@@ -142,13 +156,16 @@ export function SwapWidget() {
   const onAction = () => {
     if (!isConnected || !isDeployed) return;
     if (numericAmount <= 0 || insufficientFunds) return;
+    // Hard gate: never submit a swap without a live quote → never minOut=0.
+    // Without this the user is fully exposed to sandwich MEV.
+    if (!hasQuote) return;
 
     if (mode === 'acquire') {
       swapTx.writeContract({
         address: kothRouter,
         abi: KOTHRouterAbi,
         functionName: 'buy',
-        args: [0n],
+        args: [minOutWei],
         value: inputWei,
       });
     } else {
@@ -156,7 +173,7 @@ export function SwapWidget() {
         address: kothRouter,
         abi: KOTHRouterAbi,
         functionName: 'sell',
-        args: [inputWei, 0n],
+        args: [inputWei, minOutWei],
       });
     }
   };
@@ -179,6 +196,11 @@ export function SwapWidget() {
     if (isSwapping) {
       return mode === 'acquire' ? 'Crowning…' : 'Abdicating…';
     }
+    if (!hasQuote) {
+      return quote.isLoading
+        ? 'Fetching rate…'
+        : 'No rate · cannot guard slippage';
+    }
     if (mode === 'acquire') {
       return willCrown ? 'Ascend the throne' : 'Tribute paid · no crown';
     }
@@ -195,6 +217,8 @@ export function SwapWidget() {
     isSwapping,
     willCrown,
     willDethroneSelf,
+    hasQuote,
+    quote.isLoading,
   ]);
 
   const buttonDisabled =
@@ -202,7 +226,8 @@ export function SwapWidget() {
     !isDeployed ||
     numericAmount <= 0 ||
     insufficientFunds ||
-    isWorking;
+    isWorking ||
+    (!needsApprove && !hasQuote);   // never submit a swap with no slippage guard
 
   const showCrownStyle = willCrown && mode === 'acquire' && !needsApprove;
   const needsHold = willDethroneSelf && !needsApprove && !isWorking;
@@ -382,10 +407,35 @@ export function SwapWidget() {
             <span>To Royal Treasury</span>
             <span className="text-parchment-soft tnum">1.00%</span>
           </li>
-          <li className="flex justify-between">
+          <li className="flex items-center justify-between gap-2">
             <span>Slippage Tolerance</span>
-            <span className="text-parchment-soft tnum">disabled</span>
+            <span className="flex items-center gap-1">
+              {SLIPPAGE_PRESETS_BPS.map((bps) => (
+                <button
+                  type="button"
+                  key={bps}
+                  onClick={() => setSlippageBps(bps)}
+                  className={`tnum text-[10px] px-1.5 py-0.5 rounded-sm transition-colors ${
+                    slippageBps === bps
+                      ? 'bg-gold/20 text-gold border border-gold/40'
+                      : 'text-stone hover:text-parchment border border-bronze/40 hover:border-bronze'
+                  }`}
+                >
+                  {(bps / 100).toFixed(bps < 100 ? 1 : 0)}%
+                </button>
+              ))}
+            </span>
           </li>
+          {hasQuote && (
+            <li className="flex justify-between text-stone/80">
+              <span>Min Received</span>
+              <span className="text-parchment-soft tnum normal-case">
+                {mode === 'acquire'
+                  ? `${formatDecimal(Number(minOutWei) / 1e18, { maximumFractionDigits: 2 })} KOTH`
+                  : `${formatDecimal(Number(minOutWei) / 1e18, { maximumFractionDigits: 6 })} Ξ`}
+              </span>
+            </li>
+          )}
         </ul>
 
         {user.pullBalanceWei > 0n && (

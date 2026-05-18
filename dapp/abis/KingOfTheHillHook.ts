@@ -31,6 +31,11 @@ export const KingOfTheHillHookAbi = [
         "name": "_router",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "_admin",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -80,6 +85,19 @@ export const KingOfTheHillHookAbi = [
   },
   {
     "type": "function",
+    "name": "FORFEIT_SLIP_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "KEEPER_TIP_BPS",
     "inputs": [],
     "outputs": [
@@ -106,6 +124,19 @@ export const KingOfTheHillHookAbi = [
   },
   {
     "type": "function",
+    "name": "MIN_FORFEIT_AMOUNT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "THRESHOLD_BPS",
     "inputs": [],
     "outputs": [
@@ -113,6 +144,19 @@ export const KingOfTheHillHookAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "admin",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -958,6 +1002,11 @@ export const KingOfTheHillHookAbi = [
         "name": "staleKing",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "minKothOut",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -1466,6 +1515,11 @@ export const KingOfTheHillHookAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidPoolKey",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotDethroned",
     "inputs": []
   },
@@ -1477,6 +1531,11 @@ export const KingOfTheHillHookAbi = [
   {
     "type": "error",
     "name": "NothingToForfeit",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OnlyAdmin",
     "inputs": []
   },
   {
@@ -1502,6 +1561,11 @@ export const KingOfTheHillHookAbi = [
   {
     "type": "error",
     "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SlippageExceeded",
     "inputs": []
   },
   {

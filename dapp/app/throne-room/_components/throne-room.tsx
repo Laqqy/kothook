@@ -127,6 +127,7 @@ function DethronedRow({
   const blocksAgo = useBlocksAgo(entry.dethronedAt);
   const [copied, setCopied] = useState(false);
   const released = entry.status === 'released';
+  const reigning = entry.status === 'reigning';
 
   const onCopy = () => {
     void navigator.clipboard.writeText(entry.king);
@@ -135,6 +136,7 @@ function DethronedRow({
   };
 
   const dotColor = {
+    reigning: 'bg-gold throb',
     locked: 'bg-gold-leaf',
     forfeitable: 'bg-gold',
     released: 'bg-stone-soft',
@@ -147,7 +149,11 @@ function DethronedRow({
   return (
     <li
       className={`reveal vellum-card rounded-sm transition-all px-5 py-5 grid grid-cols-1 md:grid-cols-12 gap-4 items-center ${
-        released ? 'opacity-55 grayscale-[0.25]' : 'hover:border-gold-leaf/50'
+        released
+          ? 'opacity-55 grayscale-[0.25]'
+          : reigning
+            ? 'border-gold/40 shadow-[0_0_18px_rgba(232,179,57,0.15)]'
+            : 'hover:border-gold-leaf/50'
       }`}
       style={{ animationDelay: `${index * 80 + 200}ms` }}
     >
@@ -156,9 +162,11 @@ function DethronedRow({
         <span className={`w-2 h-2 rounded-sm shrink-0 ${dotColor}`} />
         <div className="min-w-0">
           <div
-            className={`font-mono text-[10px] uppercase tracking-[0.3em] ${labelColor}`}
+            className={`font-mono text-[10px] uppercase tracking-[0.3em] ${
+              reigning ? 'text-gold' : labelColor
+            }`}
           >
-            {released ? 'Released' : 'Deposed'}
+            {reigning ? 'Reigning' : released ? 'Released' : 'Deposed'}
           </div>
           <button
             type="button"
@@ -198,30 +206,52 @@ function DethronedRow({
       {/* When */}
       <div className="md:col-span-2">
         <div
-          className={`font-mono text-[10px] uppercase tracking-[0.3em] ${labelColor}`}
-        >
-          Dethroned
-        </div>
-        <div
-          className={`font-mono text-sm tnum ${
-            released ? 'text-stone' : 'text-parchment'
+          className={`font-mono text-[10px] uppercase tracking-[0.3em] ${
+            reigning ? 'text-gold' : labelColor
           }`}
         >
-          {blocksAgo > 0n ? `${formatInt(blocksAgo)} blocks ago` : 'this block'}
+          {reigning ? 'Crowned' : 'Dethroned'}
         </div>
-        <div className="font-mono text-[10px] text-stone-soft tnum">
-          Block {formatInt(entry.dethronedAt)}
-        </div>
+        {reigning ? (
+          <div className="font-mono text-sm tnum text-parchment">
+            on the throne
+          </div>
+        ) : (
+          <>
+            <div
+              className={`font-mono text-sm tnum ${
+                released ? 'text-stone' : 'text-parchment'
+              }`}
+            >
+              {blocksAgo > 0n ? `${formatInt(blocksAgo)} blocks ago` : 'this block'}
+            </div>
+            <div className="font-mono text-[10px] text-stone-soft tnum">
+              Block {formatInt(entry.dethronedAt)}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Countdown / status */}
       <div className="md:col-span-2">
         <div
-          className={`font-mono text-[10px] uppercase tracking-[0.3em] ${labelColor}`}
+          className={`font-mono text-[10px] uppercase tracking-[0.3em] ${
+            reigning ? 'text-gold' : labelColor
+          }`}
         >
           Status
         </div>
-        {entry.status === 'forfeitable' ? (
+        {reigning ? (
+          <>
+            <div className="font-display text-lg text-gold flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-gold throb inline-block" />
+              Accruing
+            </div>
+            <div className="font-mono text-[10px] text-stone">
+              2% on every swap
+            </div>
+          </>
+        ) : entry.status === 'forfeitable' ? (
           <>
             <div className="font-display text-lg text-gold flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-gold throb inline-block" />
@@ -252,7 +282,11 @@ function DethronedRow({
 
       {/* Action */}
       <div className="md:col-span-3 flex justify-end">
-        {released ? (
+        {reigning ? (
+          <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-gold border border-gold/40 px-3 py-2 rounded-sm">
+            ·  the king  ·
+          </span>
+        ) : released ? (
           <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-stone border border-bronze/40 px-3 py-2 rounded-sm">
             · settled ·
           </span>
@@ -275,11 +309,14 @@ function ReclaimButton({ entry }: { entry: DethronedEntry }) {
 
   const onClick = () => {
     if (!callable) return;
+    // minKothOut = 0 — the hook caps in-swap deviation via FORFEIT_SLIP_BPS
+    // (50 bps on sqrtPrice). An honest keeper that wants tighter execution
+    // can call the contract directly with a computed minimum.
     writeContract({
       address: hook,
       abi: KingOfTheHillHookAbi,
       functionName: 'forfeit',
-      args: [entry.king],
+      args: [entry.king, 0n],
     });
   };
 
