@@ -64,6 +64,19 @@
   },
   {
     "type": "function",
+    "name": "admin",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "allowance",
     "inputs": [
       {
@@ -233,6 +246,13 @@
   },
   {
     "type": "function",
+    "name": "renounceAdmin",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setHook",
     "inputs": [
       {
@@ -322,6 +342,12 @@
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AdminRenounced",
+    "inputs": [],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -478,6 +504,11 @@
   {
     "type": "error",
     "name": "HookAlreadySet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OnlyAdmin",
     "inputs": []
   },
   {

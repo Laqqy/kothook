@@ -241,6 +241,14 @@ contract DeployMainnet is Script {
             block.timestamp + MINT_DEADLINE_BUFFER
         );
 
+        // 8. Renounce admin on all three contracts. After this every
+        //    privileged init function reverts (OnlyAdmin, admin = 0x0).
+        //    GoPlus / De.Fi / Honeypot.is read these slots and downgrade
+        //    tokens with a live owner — zeroing them maximises trust scores.
+        koth.renounceAdmin();
+        hook.renounceAdmin();
+        kothRouter.renounceAdmin();
+
         vm.stopBroadcast();
 
         console.log("=== KOTH Mainnet Deployment Complete ===");

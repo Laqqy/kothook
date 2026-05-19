@@ -31,6 +31,11 @@
         "name": "_router",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "_admin",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -80,6 +85,19 @@
   },
   {
     "type": "function",
+    "name": "FORFEIT_SLIP_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "KEEPER_TIP_BPS",
     "inputs": [],
     "outputs": [
@@ -106,6 +124,19 @@
   },
   {
     "type": "function",
+    "name": "MIN_FORFEIT_AMOUNT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "THRESHOLD_BPS",
     "inputs": [],
     "outputs": [
@@ -113,6 +144,19 @@
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "admin",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -958,6 +1002,11 @@
         "name": "staleKing",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "minKothOut",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -1246,6 +1295,13 @@
   },
   {
     "type": "function",
+    "name": "renounceAdmin",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "router",
     "inputs": [],
     "outputs": [
@@ -1345,6 +1401,12 @@
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AdminRenounced",
+    "inputs": [],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -1466,6 +1528,11 @@
   },
   {
     "type": "error",
+    "name": "InvalidPoolKey",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotDethroned",
     "inputs": []
   },
@@ -1477,6 +1544,11 @@
   {
     "type": "error",
     "name": "NothingToForfeit",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OnlyAdmin",
     "inputs": []
   },
   {
@@ -1502,6 +1574,11 @@
   {
     "type": "error",
     "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SlippageExceeded",
     "inputs": []
   },
   {

@@ -183,6 +183,13 @@ export const KOTHRouterAbi = [
   },
   {
     "type": "function",
+    "name": "renounceAdmin",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "sell",
     "inputs": [
       {
@@ -223,6 +230,12 @@ export const KOTHRouterAbi = [
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AdminRenounced",
+    "inputs": [],
+    "anonymous": false
   },
   {
     "type": "error",

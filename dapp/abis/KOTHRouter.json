@@ -26,6 +26,19 @@
   },
   {
     "type": "function",
+    "name": "admin",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "buy",
     "inputs": [
       {
@@ -170,6 +183,13 @@
   },
   {
     "type": "function",
+    "name": "renounceAdmin",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "sell",
     "inputs": [
       {
@@ -212,13 +232,29 @@
     "stateMutability": "nonpayable"
   },
   {
+    "type": "event",
+    "name": "AdminRenounced",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "InsufficientOutput",
     "inputs": []
   },
   {
     "type": "error",
+    "name": "InvalidPoolKey",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotPoolManager",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OnlyAdmin",
     "inputs": []
   },
   {

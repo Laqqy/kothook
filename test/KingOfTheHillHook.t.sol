@@ -421,6 +421,9 @@ contract KingOfTheHillHookTest is DeployFixture {
         );
         address freshAddr = address(uint160(0x1100_0000_00FF));
         vm.etch(freshAddr, address(fresh).code);
+        // admin is now storage-slot 0 — replay the constructor assignment so
+        // the etched bytecode has a non-zero admin to admit our call below.
+        vm.store(freshAddr, bytes32(uint256(0)), bytes32(uint256(uint160(address(this)))));
         KingOfTheHillHook newHook = KingOfTheHillHook(payable(freshAddr));
 
         address rando = makeAddr("rando");

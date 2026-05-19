@@ -68,6 +68,11 @@ abstract contract DeployFixture is Test, Deployers {
             address(this)   // admin
         );
         vm.etch(HOOK_ADDR, address(impl).code);
+        // `admin` moved from immutable to storage (slot 0) for renounceability.
+        // vm.etch copies bytecode only, leaving storage zero — so we replay the
+        // constructor assignment here so the etched hook recognises this test
+        // contract as admin for the one-shot init calls below.
+        vm.store(HOOK_ADDR, bytes32(uint256(0)), bytes32(uint256(uint160(address(this)))));
 
         kothHook = KingOfTheHillHook(payable(HOOK_ADDR));
 

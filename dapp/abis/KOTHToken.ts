@@ -246,6 +246,13 @@ export const KOTHTokenAbi = [
   },
   {
     "type": "function",
+    "name": "renounceAdmin",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setHook",
     "inputs": [
       {
@@ -335,6 +342,12 @@ export const KOTHTokenAbi = [
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AdminRenounced",
+    "inputs": [],
+    "anonymous": false
   },
   {
     "type": "event",

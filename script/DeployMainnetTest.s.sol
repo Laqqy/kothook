@@ -213,6 +213,12 @@ contract DeployMainnetTest is Script {
         uint256 kehtAfter = keht.balanceOf(deployer);
         require(kehtAfter > kehtBefore, "Test buy did not deliver KEHT");
 
+        // 8. Renounce admin on all three. Same flow we run on mainnet —
+        //    keeps the test deploy representative.
+        keht.renounceAdmin();
+        hook.renounceAdmin();
+        kothRouter.renounceAdmin();
+
         vm.stopBroadcast();
 
         console.log("=== KEHT Mainnet TEST Deploy Complete ===");

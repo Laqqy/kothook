@@ -44,7 +44,11 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     ChronicleScroll public immutable scroll;
     address        public immutable treasury;
     address        public immutable router;
-    address        public immutable admin;
+    /// @notice Privileged address for the two one-shot init calls
+    /// (`initializePoolKey`, `seedRecord`). Zeroed via `renounceAdmin` at the
+    /// end of the deploy script so scanner heuristics (GoPlus etc.) don't
+    /// flag a live owner.
+    address        public admin;
 
     // ============ State ============
     PoolKey     public poolKey;
@@ -79,6 +83,7 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
     event Claimed(address indexed king, uint256 amount);
     event TreasuryClaimed(uint256 amount);
     event Forfeited(address indexed king, uint256 totalAmount, uint256 keeperTip, uint256 kothBurned);
+    event AdminRenounced();
 
     constructor(
         IPoolManager _manager,
@@ -158,6 +163,16 @@ contract KingOfTheHillHook is IHooks, ReentrancyGuard, IUnlockCallback {
         _seedDone = true;
         highestBuyAmount = amount;
         highestBuyBlock = atBlock;
+    }
+
+    /// @notice Permanently zero the `admin` slot. After this, neither
+    /// `initializePoolKey` nor `seedRecord` can be called again (both revert
+    /// on `msg.sender != admin` with admin = 0x0). Deploy script calls this
+    /// directly after both one-shot inits succeed.
+    function renounceAdmin() external {
+        if (msg.sender != admin) revert OnlyAdmin();
+        admin = address(0);
+        emit AdminRenounced();
     }
 
     // ============ IHooks implementation (stubs — logic added in later tasks) ============

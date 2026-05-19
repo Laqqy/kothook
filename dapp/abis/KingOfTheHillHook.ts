@@ -1295,6 +1295,13 @@ export const KingOfTheHillHookAbi = [
   },
   {
     "type": "function",
+    "name": "renounceAdmin",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "router",
     "inputs": [],
     "outputs": [
@@ -1394,6 +1401,12 @@ export const KingOfTheHillHookAbi = [
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AdminRenounced",
+    "inputs": [],
+    "anonymous": false
   },
   {
     "type": "event",

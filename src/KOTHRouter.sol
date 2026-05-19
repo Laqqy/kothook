@@ -17,10 +17,15 @@ contract KOTHRouter is IUnlockCallback {
     IPoolManager public immutable poolManager;
     KOTHToken public immutable koth;
     KingOfTheHillHook public immutable hook;
-    address public immutable admin;
+    /// @notice Privileged address for the one-shot `initializePool` call.
+    /// Zeroed via `renounceAdmin` at the end of the deploy script so scanner
+    /// heuristics don't flag a live owner.
+    address public admin;
 
     PoolKey public poolKey;
     bool public poolInitialized;
+
+    event AdminRenounced();
 
     enum SwapKind { Buy, Sell }
 
@@ -49,6 +54,15 @@ contract KOTHRouter is IUnlockCallback {
         if (address(key.hooks) != address(hook)) revert InvalidPoolKey();
         poolKey = key;
         poolInitialized = true;
+    }
+
+    /// @notice Permanently zero the `admin` slot. After this, `initializePool`
+    /// can never be called again. Deploy script calls this directly after
+    /// the one-shot pool init succeeds.
+    function renounceAdmin() external {
+        if (msg.sender != admin) revert OnlyAdmin();
+        admin = address(0);
+        emit AdminRenounced();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
