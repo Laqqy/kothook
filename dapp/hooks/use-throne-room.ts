@@ -10,19 +10,16 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { createPublicClient, http, type Address } from 'viem';
 import { parseEther } from 'viem';
-import { mainnet, sepolia } from '@/lib/chains';
+import { mainnet } from '@/lib/chains';
 import { KingOfTheHillHookAbi } from '@/abis';
 import { useContracts, useIsDeployed } from './use-contracts';
 import { useKing } from './use-king';
 
 /**
- * Alchemy's free tier caps eth_getLogs at a 10-block window. Public providers
- * (PublicNode for Sepolia, Llamarpc for mainnet) allow the full range. Override
- * via `NEXT_PUBLIC_<NETWORK>_LOGS_RPC` in production — a paid Alchemy/Infura
- * URL with eth_getLogs enabled is preferred under load.
+ * Alchemy's free tier caps eth_getLogs at a 10-block window. Llamarpc allows
+ * the full range. Override via `NEXT_PUBLIC_MAINNET_LOGS_RPC` in production —
+ * a paid Alchemy/Infura URL with eth_getLogs enabled is preferred under load.
  */
-const SEPOLIA_LOGS_RPC =
-  process.env.NEXT_PUBLIC_SEPOLIA_LOGS_RPC ?? 'https://ethereum-sepolia-rpc.publicnode.com';
 const MAINNET_LOGS_RPC =
   process.env.NEXT_PUBLIC_MAINNET_LOGS_RPC ?? 'https://eth.llamarpc.com';
 
@@ -31,10 +28,6 @@ const MAINNET_LOGS_RPC =
  * walk ~21M blocks and time out on any free-tier provider, so we anchor the
  * scan at the deploy block.
  */
-const SEPOLIA_DEPLOY_BLOCK =
-  process.env.NEXT_PUBLIC_SEPOLIA_DEPLOY_BLOCK
-    ? BigInt(process.env.NEXT_PUBLIC_SEPOLIA_DEPLOY_BLOCK)
-    : 0n;
 const MAINNET_DEPLOY_BLOCK =
   process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK
     ? BigInt(process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK)
@@ -44,15 +37,11 @@ function logsClientFor(chainId: number) {
   if (chainId === mainnet.id) {
     return createPublicClient({ chain: mainnet, transport: http(MAINNET_LOGS_RPC) });
   }
-  if (chainId === sepolia.id) {
-    return createPublicClient({ chain: sepolia, transport: http(SEPOLIA_LOGS_RPC) });
-  }
   return null;
 }
 
 function deployBlockFor(chainId: number): bigint | 'earliest' {
   if (chainId === mainnet.id) return MAINNET_DEPLOY_BLOCK === 0n ? 'earliest' : MAINNET_DEPLOY_BLOCK;
-  if (chainId === sepolia.id) return SEPOLIA_DEPLOY_BLOCK === 0n ? 'earliest' : SEPOLIA_DEPLOY_BLOCK;
   return 'earliest';
 }
 

@@ -9,7 +9,7 @@ import {
 } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
 import { createPublicClient, http, type Address } from 'viem';
-import { mainnet, sepolia } from '@/lib/chains';
+import { mainnet } from '@/lib/chains';
 import {
   ChronicleSoulAbi,
   ChronicleScrollAbi,
@@ -17,18 +17,11 @@ import {
 } from '@/abis';
 import { useContracts, useIsDeployed } from './use-contracts';
 
-// Logs RPC — override via env in production. See use-throne-room.ts for the
-// same pattern. Anchoring to the deploy block keeps mainnet eth_getLogs
-// requests inside provider limits.
-const SEPOLIA_LOGS_RPC =
-  process.env.NEXT_PUBLIC_SEPOLIA_LOGS_RPC ?? 'https://ethereum-sepolia-rpc.publicnode.com';
+// Logs RPC — override via env in production. Anchoring to the deploy block
+// keeps mainnet eth_getLogs requests inside provider limits.
 const MAINNET_LOGS_RPC =
   process.env.NEXT_PUBLIC_MAINNET_LOGS_RPC ?? 'https://eth.llamarpc.com';
 
-const SEPOLIA_DEPLOY_BLOCK =
-  process.env.NEXT_PUBLIC_SEPOLIA_DEPLOY_BLOCK
-    ? BigInt(process.env.NEXT_PUBLIC_SEPOLIA_DEPLOY_BLOCK)
-    : 0n;
 const MAINNET_DEPLOY_BLOCK =
   process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK
     ? BigInt(process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK)
@@ -38,15 +31,11 @@ function logsClientFor(chainId: number) {
   if (chainId === mainnet.id) {
     return createPublicClient({ chain: mainnet, transport: http(MAINNET_LOGS_RPC) });
   }
-  if (chainId === sepolia.id) {
-    return createPublicClient({ chain: sepolia, transport: http(SEPOLIA_LOGS_RPC) });
-  }
   return null;
 }
 
 function deployBlockFor(chainId: number): bigint | 'earliest' {
   if (chainId === mainnet.id) return MAINNET_DEPLOY_BLOCK === 0n ? 'earliest' : MAINNET_DEPLOY_BLOCK;
-  if (chainId === sepolia.id) return SEPOLIA_DEPLOY_BLOCK === 0n ? 'earliest' : SEPOLIA_DEPLOY_BLOCK;
   return 'earliest';
 }
 
