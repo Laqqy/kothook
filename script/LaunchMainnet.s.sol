@@ -17,6 +17,8 @@ import {KOTHRouter} from "src/KOTHRouter.sol";
 
 import {IERC20Minimal} from "v4-core/src/interfaces/external/IERC20Minimal.sol";
 import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
+import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
+import {PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 
 /// @notice **Phase 2** of the KOTH mainnet rollout: assumes Phase 1 has
 ///         already deployed all five contracts (run DeployMainnet.s.sol first).
@@ -45,6 +47,9 @@ import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
 ///         --ledger --sender 0x<deployer> \
 ///         --broadcast --slow
 contract LaunchMainnet is Script {
+    using StateLibrary for IPoolManager;
+    using PoolIdLibrary for PoolKey;
+
     address internal constant MAINNET_POOL_MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     address internal constant MAINNET_POSITION_MANAGER = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -102,29 +107,29 @@ contract LaunchMainnet is Script {
             hooks: IHooks(hookAddr)
         });
 
+        // Pool must already exist from Phase 1 at the same sqrtPriceX96 we
+        // compute now — otherwise SEED_ETH/SEED_KOTH have drifted from what
+        // Phase 1 used and the deposit ratio wouldn't match. Catch this here
+        // rather than letting modifyLiquidities deposit a wrong amount.
+        (uint160 poolSqrtPriceX96,,,) = manager.getSlot0(pk_.toId());
+        require(poolSqrtPriceX96 != 0, "Pool not initialized - run DeployMainnet (Phase 1) first");
+        require(
+            poolSqrtPriceX96 == initialSqrtPriceX96,
+            "SEED amounts do not match Phase 1's locked sqrtPriceX96"
+        );
+
         console.log("=== KOTH Mainnet Launch - Phase 2 ===");
         console.log("Deployer  :", deployer);
         console.log("SEED_ETH  :", seedEth);
         console.log("SEED_KOTH :", seedKoth);
         console.log("TEST_BUY  :", testBuyWei);
-        console.log("sqrtP_X96 :", uint256(initialSqrtPriceX96));
+        console.log("sqrtP_X96 :", uint256(initialSqrtPriceX96), "(matches pool)");
         console.log("LIQUIDITY :", uint256(liquidity));
 
         if (pkEnv != 0) vm.startBroadcast(pkEnv);
         else            vm.startBroadcast();
 
-        // 1. Create the pool. Anyone could have done this between Phase 1 and
-        //    Phase 2, but the only thing it changes is the initial sqrtP; if
-        //    someone front-ran initialize at a wrong price, modifyLiquidities
-        //    below would still succeed but our supply ↔ ETH ratio would not
-        //    match the price we intended. Catch and revert if so.
-        try manager.initialize(pk_, initialSqrtPriceX96) returns (int24) {
-            // pool created at our price
-        } catch {
-            revert("manager.initialize reverted - pool was already initialized at a different price");
-        }
-
-        // 2. Permit2 dance
+        // 1. Permit2 dance
         IERC20Minimal(address(koth)).approve(PERMIT2, type(uint256).max);
         IAllowanceTransfer(PERMIT2).approve(
             address(koth),
@@ -133,7 +138,7 @@ contract LaunchMainnet is Script {
             PERMIT2_EXPIRATION
         );
 
-        // 3. Mint full-range LP NFT
+        // 2. Mint full-range LP NFT
         bytes memory actions = abi.encodePacked(
             uint8(Actions.MINT_POSITION),
             uint8(Actions.SETTLE_PAIR)
@@ -161,7 +166,7 @@ contract LaunchMainnet is Script {
         // one in the ERC721 Transfer event emitted by modifyLiquidities.
         lpTokenId = IPositionManager(MAINNET_POSITION_MANAGER).nextTokenId() - 1;
 
-        // 4. Optional verification buy. If skipped, you (or anyone) can become
+        // 3. Optional verification buy. If skipped, you (or anyone) can become
         //    the first king via the regular Acquire flow on the dapp.
         if (testBuyWei > 0) {
             uint256 kothBefore = koth.balanceOf(deployer);

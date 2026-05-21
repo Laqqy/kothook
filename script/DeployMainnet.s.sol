@@ -14,6 +14,7 @@ import {ChronicleSoul} from "src/ChronicleSoul.sol";
 import {ChronicleScroll} from "src/ChronicleScroll.sol";
 
 import {HookMiner} from "./HookMiner.sol";
+import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
 
 /// @notice **Phase 1** of the KOTH mainnet rollout: deploys all five contracts,
 ///         performs the admin-only inits, and burns admin on every contract.
@@ -30,7 +31,18 @@ import {HookMiner} from "./HookMiner.sol";
 ///         path is for forks and tests only.
 ///
 /// Required env:
-///     TREASURY   address   Cold-wallet / multisig that owns protocol fees.
+///     TREASURY    address   Cold-wallet / multisig that owns protocol fees.
+/// Optional env:
+///     SEED_ETH    uint      ETH (wei) you intend to deposit in Phase 2.
+///                           Defaults to 1 ether. Used now to lock sqrtPriceX96.
+///     SEED_KOTH   uint      KOTH (wei) you intend to deposit in Phase 2.
+///                           Defaults to 1_000_000 ether (100% of supply).
+///
+/// Phase 1 calls manager.initialize on the v4 pool using the sqrtP derived
+/// from SEED_ETH/SEED_KOTH. This locks the pool at the launch price *now*
+/// so a front-runner cannot initialize the pool at a worse price between
+/// Phase 1 and Phase 2. Phase 2 then just seeds liquidity and (optionally)
+/// places the verification buy.
 ///
 /// Usage (Ledger):
 ///     forge script script/DeployMainnet.s.sol \
@@ -76,6 +88,14 @@ contract DeployMainnet is Script {
             console.log(unicode"WARN: TREASURY = deployer. Single key controls all fees.");
         }
 
+        // Future SEED amounts — used now only to lock the initial pool price.
+        uint256 seedEth = vm.envOr("SEED_ETH", uint256(1 ether));
+        uint256 seedKoth = vm.envOr("SEED_KOTH", uint256(1_000_000 ether));
+        uint256 sqrtA1 = FixedPointMathLib.sqrt(seedKoth);
+        uint256 sqrtA0 = FixedPointMathLib.sqrt(seedEth);
+        require(sqrtA0 > 0, "seed ETH too small");
+        uint160 initialSqrtPriceX96 = uint160((sqrtA1 << 96) / sqrtA0);
+
         IPoolManager manager = IPoolManager(MAINNET_POOL_MANAGER);
         d.poolManager = MAINNET_POOL_MANAGER;
         d.treasury = treasury;
@@ -83,6 +103,9 @@ contract DeployMainnet is Script {
         console.log("=== KOTH Mainnet Deploy - Phase 1 (no LP yet) ===");
         console.log("Deployer  :", deployer);
         console.log("Treasury  :", treasury);
+        console.log("SEED_ETH  :", seedEth, "(used to lock pool price)");
+        console.log("SEED_KOTH :", seedKoth);
+        console.log("sqrtP_X96 :", uint256(initialSqrtPriceX96));
 
         uint64 nonce = vm.getNonce(deployer);
         address predictedKoth        = vm.computeCreateAddress(deployer, nonce + 0);
@@ -163,7 +186,12 @@ contract DeployMainnet is Script {
         hook.initializePoolKey(pk_);
         kothRouter.initializePool(pk_);
 
-        // 5. Renounce admin on all three. Token, hook and router are now
+        // 5. Create the v4 pool at the launch price. From here a front-runner
+        //    cannot re-initialize it at a worse sqrtP between Phase 1 and 2.
+        //    Pool exists with zero liquidity — swaps revert until Phase 2.
+        manager.initialize(pk_, initialSqrtPriceX96);
+
+        // 6. Renounce admin on all three. Token, hook and router are now
         //    permanently ownerless — scanners read these slots and downgrade
         //    tokens with a live owner.
         koth.renounceAdmin();
