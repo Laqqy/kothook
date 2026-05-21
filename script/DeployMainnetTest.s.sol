@@ -20,6 +20,7 @@ import {ChronicleScroll} from "src/ChronicleScroll.sol";
 
 import {HookMiner} from "./HookMiner.sol";
 import {IERC20Minimal} from "v4-core/src/interfaces/external/IERC20Minimal.sol";
+import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
 
 /// @notice MAINNET TEST deploy of KEST (test token), seeded via the canonical
 ///         Uniswap v4 PositionManager. Same liquidity path as production
@@ -37,9 +38,10 @@ contract DeployMainnetTest is Script {
     address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     uint160 internal constant HOOK_FLAGS = 0x00CC;
-    uint160 internal constant INITIAL_SQRT_PRICE_X96 = 79228162514264337593543950336000;
     int24   internal constant TICK_LOWER = -887220;
     int24   internal constant TICK_UPPER =  887220;
+    /// @dev Full token supply (constant in KOTHToken).
+    uint256 internal constant TOTAL_SUPPLY = 1_000_000 ether;
     uint256 internal constant MAINNET_CHAIN_ID = 1;
 
     uint48 internal constant PERMIT2_EXPIRATION = type(uint48).max;
@@ -76,14 +78,28 @@ contract DeployMainnetTest is Script {
             console.log(unicode"⚠️  TREASURY = deployer. Single key controls all fees.");
         }
 
-        // Defaults: 0.005 ETH + 100% of KEST supply (1e24 = 1M tokens, full range).
+        // Defaults: 0.005 ETH + 100% of KEST supply (1M tokens) at full range.
+        // The initial price is *derived* from these two amounts — it's the only
+        // sqrtP that lets us deposit both at the same time.
         uint256 seedEth = vm.envOr("SEED_ETH", uint256(0.005 ether));
-        uint256 liquidity = vm.envOr("LIQUIDITY", uint256(1e21));
+        uint256 seedKest = vm.envOr("SEED_KEST", TOTAL_SUPPLY);
 
         require(
             deployer.balance >= seedEth + TEST_BUY_WEI + 0.04 ether,
             "Deployer ETH insufficient (need >=0.0455 ETH + gas)"
         );
+
+        // For a full-range position:
+        //   amount0 ≈ L / sqrtP        amount1 ≈ L * sqrtP
+        //   → L = sqrt(amount0 * amount1),    sqrtP = sqrt(amount1 / amount0)
+        // We derive sqrtPriceX96 by computing sqrt(amount1 * 2^192 / amount0)
+        // staged via two integer sqrts to avoid overflow:
+        //   sqrtPriceX96 = (sqrt(amount1) << 96) / sqrt(amount0)
+        uint256 sqrtA1 = FixedPointMathLib.sqrt(seedKest);
+        uint256 sqrtA0 = FixedPointMathLib.sqrt(seedEth);
+        require(sqrtA0 > 0, "seed ETH too small");
+        uint160 initialSqrtPriceX96 = uint160((sqrtA1 << 96) / sqrtA0);
+        uint128 liquidity = uint128(FixedPointMathLib.sqrt(seedEth * seedKest));
 
         IPoolManager manager = IPoolManager(MAINNET_POOL_MANAGER);
         d.poolManager = MAINNET_POOL_MANAGER;
@@ -94,7 +110,9 @@ contract DeployMainnetTest is Script {
         console.log("Deployer  :", deployer);
         console.log("Treasury  :", treasury);
         console.log("SEED_ETH  :", seedEth);
-        console.log("LIQUIDITY :", liquidity);
+        console.log("SEED_KEST :", seedKest);
+        console.log("LIQUIDITY :", uint256(liquidity));
+        console.log("sqrtP_X96 :", uint256(initialSqrtPriceX96));
         console.log("TEST_BUY  :", TEST_BUY_WEI);
 
         uint64 nonce = vm.getNonce(deployer);
@@ -171,7 +189,7 @@ contract DeployMainnetTest is Script {
         });
         hook.initializePoolKey(pk_);
         kothRouter.initializePool(pk_);
-        manager.initialize(pk_, INITIAL_SQRT_PRICE_X96);
+        manager.initialize(pk_, initialSqrtPriceX96);
 
         // 5. Permit2 dance
         IERC20Minimal(address(kest)).approve(PERMIT2, type(uint256).max);
@@ -195,7 +213,7 @@ contract DeployMainnetTest is Script {
             pk_,
             TICK_LOWER,
             TICK_UPPER,
-            liquidity,
+            uint256(liquidity),
             type(uint128).max,
             type(uint128).max,
             deployer,
