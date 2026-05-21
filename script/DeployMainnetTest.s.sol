@@ -99,7 +99,12 @@ contract DeployMainnetTest is Script {
         uint256 sqrtA0 = FixedPointMathLib.sqrt(seedEth);
         require(sqrtA0 > 0, "seed ETH too small");
         uint160 initialSqrtPriceX96 = uint160((sqrtA1 << 96) / sqrtA0);
-        uint128 liquidity = uint128(FixedPointMathLib.sqrt(seedEth * seedKest));
+        // Uniswap's modifyLiquidity rounds each side UP when adding liquidity,
+        // so L_raw * sqrtP can need a few hundred extra wei of token1 than the
+        // ideal `amount1 = L * sqrtP` suggests. Shave 0.001% off L to guarantee
+        // we never request more than the deployer's actual KEST/ETH balance.
+        uint128 liquidity =
+            uint128(FixedPointMathLib.sqrt(seedEth * seedKest) * 99_999 / 100_000);
 
         IPoolManager manager = IPoolManager(MAINNET_POOL_MANAGER);
         d.poolManager = MAINNET_POOL_MANAGER;
