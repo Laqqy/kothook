@@ -225,8 +225,7 @@ export function Whitepaper() {
               <strong className="text-gold">Programmatic buyback</strong>. Every
               unclaimed reign (no claim within 12 h after dethrone) becomes
               swap-and-burn fuel. The hook itself buys KOTH out of the pool
-              with the coffers and incinerates the result. This is{' '}
-              <em>actual</em> on-chain buy pressure, not a roadmap promise.
+              with the coffers and incinerates the result.
             </Bullet>
             <Bullet>
               <strong className="text-gold">Per-swap burn</strong>. 1 % of the
@@ -246,7 +245,7 @@ export function Whitepaper() {
               When a king is dethroned, their accumulated 2 % stream is locked
               in a coffer. They have <strong className="text-gold">12 hours
               </strong> to claim it. If they do not, the protocol acts on its
-              own — without an admin call, without a multisig, without a vote.
+              own — without an admin call.
             </P>
             <Bullet>
               <strong className="text-gold-leaf">3 %</strong> of the coffer is
