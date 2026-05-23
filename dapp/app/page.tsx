@@ -2,6 +2,7 @@ import { Header } from './_components/header';
 import { Hero } from './_components/hero';
 import { StatCards } from './_components/stat-cards';
 import { SwapWidget } from './_components/swap-widget';
+import { TokenCodex } from './_components/token-codex';
 import { Protocol } from './_components/protocol';
 import { Marquee } from './_components/marquee';
 import { HairlineDivider, Asterism } from './_components/ornaments';
@@ -18,8 +19,9 @@ export default function Home() {
             <div className="lg:col-span-7">
               <Hero />
             </div>
-            <div className="lg:col-span-5 lg:sticky lg:top-8 lg:self-start">
+            <div className="lg:col-span-5 lg:sticky lg:top-8 lg:self-start space-y-4">
               <SwapWidget />
+              <TokenCodex />
             </div>
           </div>
         </div>
@@ -59,7 +61,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-5 font-mono text-[10px] uppercase tracking-[0.3em]">
             <a
-              href="https://github.com/koth-xyz/king-of-the-hill"
+              href="https://github.com/Laqqy/kothook"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-gold transition-colors"
@@ -72,12 +74,12 @@ export default function Home() {
             </a>
             <span className="text-bronze-bright">·</span>
             <a
-              href="https://t.me/koth_xyz"
+              href="https://x.com/KOTHook"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-gold transition-colors"
             >
-              Telegram
+              X
             </a>
           </div>
         </footer>
