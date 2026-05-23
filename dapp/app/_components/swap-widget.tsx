@@ -603,7 +603,7 @@ function Field({
           placeholder="0.0"
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
-          className="flex-1 bg-transparent font-display text-3xl tnum text-parchment placeholder-stone outline-none"
+          className="flex-1 min-w-0 p-0 bg-transparent font-display text-3xl tnum text-parchment placeholder-stone outline-none"
         />
         <span className="font-mono text-sm text-gold-leaf tracking-widest">
           {unit}
