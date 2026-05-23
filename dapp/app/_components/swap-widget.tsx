@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   formatUnits,
   parseEther,
@@ -26,8 +26,6 @@ type Mode = 'acquire' | 'abdicate';
 // Fallback rate shown only when no on-chain quote is available (demo mode,
 // pre-mount, very first render before debounce).
 const FALLBACK_KOTH_PER_ETH = mockPricing.kothPerEth;
-
-const HOLD_MS = 750;
 
 // Slippage tolerance — user-selectable. We submit minOut = quote × (1 - slip).
 // We never submit with minOut = 0; without a live quote the button is disabled.
@@ -204,7 +202,7 @@ export function SwapWidget() {
     if (mode === 'acquire') {
       return willCrown ? 'Ascend the throne' : 'Tribute paid · no crown';
     }
-    if (willDethroneSelf) return 'Hold to seal · abdicate the crown';
+    if (willDethroneSelf) return 'Abdicate & sell';
     return 'Abdicate & sell';
   }, [
     isConnected,
@@ -230,7 +228,6 @@ export function SwapWidget() {
     (!needsApprove && !hasQuote);   // never submit a swap with no slippage guard
 
   const showCrownStyle = willCrown && mode === 'acquire' && !needsApprove;
-  const needsHold = willDethroneSelf && !needsApprove && !isWorking;
 
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
@@ -352,29 +349,21 @@ export function SwapWidget() {
           </div>
         </div>
 
-        {/* Action button — gold for coronation, vermilion+hold for self-dethrone */}
-        {needsHold ? (
-          <HoldButton
-            onConfirm={onAction}
-            label={buttonLabel}
-            disabled={buttonDisabled}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={needsApprove ? onApprove : onAction}
-            disabled={buttonDisabled}
-            className={`mt-5 w-full font-display tracking-[0.08em] text-base sm:text-lg uppercase py-3.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed ${
-              showCrownStyle
-                ? 'bg-gold text-ink hover:bg-flame border border-gold-soft shadow-[0_0_0_1px_rgba(232,179,57,0.5),0_0_32px_rgba(232,179,57,0.5)]'
-                : mode === 'acquire'
-                  ? 'bg-lapis text-parchment-cream hover:bg-lapis-bright border border-lapis-bright/50 disabled:opacity-50'
-                  : 'bg-vermilion-deep text-parchment-cream hover:bg-vermilion border border-vermilion disabled:opacity-50'
-            }`}
-          >
-            {buttonLabel}
-          </button>
-        )}
+        {/* Action button — gold for coronation, vermilion for sell */}
+        <button
+          type="button"
+          onClick={needsApprove ? onApprove : onAction}
+          disabled={buttonDisabled}
+          className={`mt-5 w-full font-display tracking-[0.08em] text-base sm:text-lg uppercase py-3.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed ${
+            showCrownStyle
+              ? 'bg-gold text-ink hover:bg-flame border border-gold-soft shadow-[0_0_0_1px_rgba(232,179,57,0.5),0_0_32px_rgba(232,179,57,0.5)]'
+              : mode === 'acquire'
+                ? 'bg-lapis text-parchment-cream hover:bg-lapis-bright border border-lapis-bright/50 disabled:opacity-50'
+                : 'bg-vermilion-deep text-parchment-cream hover:bg-vermilion border border-vermilion disabled:opacity-50'
+          }`}
+        >
+          {buttonLabel}
+        </button>
 
         {/* Tx receipt status */}
         {(swapTx.data || approveTx.data) && (
@@ -443,78 +432,6 @@ export function SwapWidget() {
         )}
       </div>
     </aside>
-  );
-}
-
-/**
- * Press-and-hold confirmation. Used when an Abdicate would dethrone the
- * pressing wallet — prevents fat-finger self-dethrones.
- */
-function HoldButton({
-  label,
-  onConfirm,
-  disabled,
-}: {
-  label: string;
-  onConfirm: () => void;
-  disabled: boolean;
-}) {
-  const [progress, setProgress] = useState(0);
-  const startedAt = useRef<number | null>(null);
-  const raf = useRef<number | null>(null);
-  const fired = useRef(false);
-
-  const stop = () => {
-    startedAt.current = null;
-    if (raf.current != null) cancelAnimationFrame(raf.current);
-    raf.current = null;
-    fired.current = false;
-    setProgress(0);
-  };
-
-  const tick = () => {
-    if (startedAt.current == null) return;
-    const elapsed = performance.now() - startedAt.current;
-    const p = Math.min(1, elapsed / HOLD_MS);
-    setProgress(p);
-    if (p >= 1) {
-      if (!fired.current) {
-        fired.current = true;
-        onConfirm();
-      }
-      stop();
-      return;
-    }
-    raf.current = requestAnimationFrame(tick);
-  };
-
-  const start = () => {
-    if (disabled || fired.current) return;
-    startedAt.current = performance.now();
-    raf.current = requestAnimationFrame(tick);
-  };
-
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onMouseDown={start}
-      onTouchStart={start}
-      onMouseUp={stop}
-      onMouseLeave={stop}
-      onTouchEnd={stop}
-      onTouchCancel={stop}
-      className="mt-5 w-full relative font-display tracking-[0.08em] text-base sm:text-lg uppercase py-3.5 rounded-sm transition-all duration-200 disabled:cursor-not-allowed bg-vermilion-deep text-parchment-cream hover:bg-vermilion border border-vermilion-bright disabled:opacity-50 overflow-hidden select-none"
-    >
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 bg-vermilion-bright/70 transition-[width] duration-75 ease-linear"
-        style={{ width: `${progress * 100}%` }}
-      />
-      <span className="relative drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
-        {label}
-      </span>
-    </button>
   );
 }
 
