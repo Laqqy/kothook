@@ -85,7 +85,7 @@ export function ThroneRoom() {
         <Stat
           icon={<Fleur className="w-4 h-4" />}
           label="ETH Locked"
-          value={`${formatWeiETH(totalLocked, 3)} Ξ`}
+          value={`${formatWeiETH(totalLocked)} Ξ`}
           tail="Across pending vaults"
           accent
         />

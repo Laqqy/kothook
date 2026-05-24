@@ -30,7 +30,7 @@ export function StatCards() {
         <Card
           icon={<Fleur className="w-4 h-4" />}
           label="Royal Treasury"
-          primary={formatWeiETH(stats.treasuryWei, 2)}
+          primary={formatWeiETH(stats.treasuryWei)}
           unit="Ξ"
           tail="1% of every swap · withdrawn by treasurer"
           accent

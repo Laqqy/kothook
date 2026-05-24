@@ -226,13 +226,13 @@ export function Hero() {
         >
           <StatStrip
             label="Tribute Accrued"
-            value={`${formatWeiETH(king.kingEarningsWei, 3)} Ξ`}
+            value={`${formatWeiETH(king.kingEarningsWei)} Ξ`}
             foot="Reigning earnings · pull to claim"
             accent="gold"
           />
           <StatStrip
             label="Tribute to Ascend"
-            value={`${formatWeiETH(king.thresholdWei, 3)} Ξ`}
+            value={`${formatWeiETH(king.thresholdWei)} Ξ`}
             foot="Decayed record × 1.03"
             accent="parchment"
           />
@@ -298,12 +298,12 @@ export function Hero() {
           </div>
           <div className="mt-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-stone">
             <span>
-              Record · {formatWeiETH(king.recordWei, 2)} Ξ
+              Record · {formatWeiETH(king.recordWei)} Ξ
             </span>
             <span>
-              Now · {formatWeiETH(king.decayedRecordWei, 3)} Ξ
+              Now · {formatWeiETH(king.decayedRecordWei)} Ξ
             </span>
-            <span>Floor · 0.000 Ξ</span>
+            <span>Floor · 0.0000 Ξ</span>
           </div>
         </div>
       </div>

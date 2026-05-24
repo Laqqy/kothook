@@ -20,19 +20,29 @@ export const formatKOTH = (n: number) =>
 export const formatETH = (n: number, maxFraction = 6) =>
   n.toLocaleString('en-US', { maximumFractionDigits: maxFraction });
 
-/** Pretty-print a wei BigInt as ETH with up to `digits` decimals. */
-export function formatWeiETH(wei: bigint, digits = 3) {
-  const formatted = formatUnits(wei, 18);
-  const n = Number(formatted);
+/**
+ * Pretty-print a wei BigInt as ETH with smart precision:
+ *   |n| >= 0.01  → 2 decimals (e.g. 0.34, 12.50)
+ *   |n| <  0.01  → `tinyDigits` decimals (default 4, e.g. 0.0001, 0.0050)
+ * Always pads to fixed digits so a zero balance reads as "0.0000" instead
+ * of collapsing to "0", and so the column stays vertically aligned.
+ */
+export function formatWeiETH(wei: bigint, tinyDigits = 4) {
+  const n = Number(formatUnits(wei, 18));
+  const fractionDigits = Math.abs(n) >= 0.01 ? 2 : tinyDigits;
   return n.toLocaleString('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: digits,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   });
 }
 
 /** Pretty-print a wei BigInt as KOTH (18 decimals) with up to `digits` decimals. */
 export function formatWeiKOTH(wei: bigint, digits = 2) {
-  return formatWeiETH(wei, digits);
+  const n = Number(formatUnits(wei, 18));
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
 }
 
 /** Compact number formatter, e.g. 142847 → "142.85K", 9857153 → "9.857M". */
