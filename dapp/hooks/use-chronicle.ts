@@ -22,10 +22,11 @@ import { useContracts, useIsDeployed } from './use-contracts';
 const MAINNET_LOGS_RPC =
   process.env.NEXT_PUBLIC_MAINNET_LOGS_RPC ?? 'https://eth.llamarpc.com';
 
-const MAINNET_DEPLOY_BLOCK =
-  process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK
-    ? BigInt(process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK)
-    : 0n;
+/**
+ * Hardcoded — keeps Cloudflare env-vars to a minimum. See lib/contracts.ts
+ * for the matching contract addresses; bump both together on real deploy.
+ */
+const MAINNET_DEPLOY_BLOCK = 25_142_131n;
 
 function logsClientFor(chainId: number) {
   if (chainId === mainnet.id) {
@@ -35,7 +36,7 @@ function logsClientFor(chainId: number) {
 }
 
 function deployBlockFor(chainId: number): bigint | 'earliest' {
-  if (chainId === mainnet.id) return MAINNET_DEPLOY_BLOCK === 0n ? 'earliest' : MAINNET_DEPLOY_BLOCK;
+  if (chainId === mainnet.id) return MAINNET_DEPLOY_BLOCK;
   return 'earliest';
 }
 

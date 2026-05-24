@@ -1,5 +1,4 @@
 import type { Address } from 'viem';
-import { zeroAddress } from 'viem';
 
 type ContractName =
   | 'koth'
@@ -12,30 +11,26 @@ type ContractName =
 
 type AddressMap = Record<ContractName, Address>;
 
-/**
- * Next.js inlines `process.env.NEXT_PUBLIC_*` at build time only when the key
- * is written as a *literal* property access. Reading via `process.env[k]`
- * with a variable doesn't get rewritten and returns `undefined` on the
- * client. Every entry below therefore reads its env var verbatim.
- */
-function addr(v: string | undefined, fallback: Address = zeroAddress): Address {
-  if (!v) return fallback;
-  if (!/^0x[a-fA-F0-9]{40}$/.test(v)) return fallback;
-  return v as Address;
-}
-
 /// Canonical Uniswap v4 PoolManager on Ethereum mainnet (chain id 1).
 const MAINNET_POOL_MANAGER = '0x000000000004444c5dc75cB358380D2e3dE08A90' as Address;
 /// Canonical Uniswap v4 Quoter on mainnet.
 const MAINNET_V4_QUOTER = '0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203' as Address;
 
+/**
+ * KOTH stack addresses. These are public on-chain identities — keeping them
+ * in source (versus Cloudflare env vars) means a redeploy is just a code
+ * commit + push. No dashboard fiddling.
+ *
+ * Currently pointing at the KEST test deploy (2026-05-21). When real KOTH
+ * ships, replace these five lines with the new DeployMainnet.s.sol output.
+ */
 const mainnetAddrs: AddressMap = {
-  koth: addr(process.env.NEXT_PUBLIC_MAINNET_KOTH),
-  hook: addr(process.env.NEXT_PUBLIC_MAINNET_HOOK),
-  kothRouter: addr(process.env.NEXT_PUBLIC_MAINNET_ROUTER),
-  chronicleSoul: addr(process.env.NEXT_PUBLIC_MAINNET_SOUL),
-  chronicleScroll: addr(process.env.NEXT_PUBLIC_MAINNET_SCROLL),
-  poolManager: addr(process.env.NEXT_PUBLIC_MAINNET_POOL_MANAGER, MAINNET_POOL_MANAGER),
+  koth: '0xcd0A94444d9A82aD58D6E7cb4b6cc0c6fe35a5D9' as Address,
+  hook: '0x9e1D97A974f741f346a0505a05922492d51380Cc' as Address,
+  kothRouter: '0x23eC893349A5d89e79B8d34D8744A625C3a04e7d' as Address,
+  chronicleSoul: '0xD0d973FBCB30a80126A43dF70fE876745C28bAB5' as Address,
+  chronicleScroll: '0xce85743B57c30Eb5A12562F9c5a64157879bF405' as Address,
+  poolManager: MAINNET_POOL_MANAGER,
   v4Quoter: MAINNET_V4_QUOTER,
 };
 

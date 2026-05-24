@@ -24,14 +24,11 @@ const MAINNET_LOGS_RPC =
   process.env.NEXT_PUBLIC_MAINNET_LOGS_RPC ?? 'https://eth.llamarpc.com';
 
 /**
- * Block from which to start scanning hook events. On mainnet `'earliest'` would
- * walk ~21M blocks and time out on any free-tier provider, so we anchor the
- * scan at the deploy block.
+ * Block from which to start scanning hook events. Hardcoded so we don't depend
+ * on a Cloudflare env var — bump it next to the addresses in lib/contracts.ts
+ * when the real KOTH ships. Currently anchored at the KEST test deploy block.
  */
-const MAINNET_DEPLOY_BLOCK =
-  process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK
-    ? BigInt(process.env.NEXT_PUBLIC_MAINNET_DEPLOY_BLOCK)
-    : 0n;
+const MAINNET_DEPLOY_BLOCK = 25_142_131n;
 
 function logsClientFor(chainId: number) {
   if (chainId === mainnet.id) {
@@ -41,7 +38,7 @@ function logsClientFor(chainId: number) {
 }
 
 function deployBlockFor(chainId: number): bigint | 'earliest' {
-  if (chainId === mainnet.id) return MAINNET_DEPLOY_BLOCK === 0n ? 'earliest' : MAINNET_DEPLOY_BLOCK;
+  if (chainId === mainnet.id) return MAINNET_DEPLOY_BLOCK;
   return 'earliest';
 }
 
