@@ -205,10 +205,7 @@ export function useThroneRoom(): ThroneRoomState {
     ];
   });
 
-  // Newest dethrone first.
-  entries.sort((a, b) =>
-    a.dethronedAt < b.dethronedAt ? 1 : a.dethronedAt > b.dethronedAt ? -1 : 0,
-  );
+  sortByActionability(entries);
 
   // Prepend the actively reigning king so the page shows every wallet that
   // currently has a coffer balance — past and present. The active row has no
@@ -252,6 +249,46 @@ export function useThroneRoom(): ThroneRoomState {
   };
 }
 
+/**
+ * Order vaults by how actionable they are, most-actionable first:
+ *   1. forfeitable ("Ready") — biggest coffer first (most reward for a keeper)
+ *   2. locked — soonest to unlock first, so the next one to ripen sits on top
+ *   3. released — most recent dethrone first (history tail)
+ * The actively reigning king is prepended separately by the caller and never
+ * appears in this array.
+ */
+function sortByActionability(entries: DethronedEntry[]): void {
+  const rank: Record<DethronedStatus, number> = {
+    forfeitable: 0,
+    locked: 1,
+    released: 2,
+    reigning: -1,
+  };
+  entries.sort((a, b) => {
+    const r = rank[a.status] - rank[b.status];
+    if (r !== 0) return r;
+    if (a.status === 'forfeitable') {
+      return a.remainingWei < b.remainingWei
+        ? 1
+        : a.remainingWei > b.remainingWei
+          ? -1
+          : 0;
+    }
+    if (a.status === 'locked') {
+      return a.blocksUntilForfeit < b.blocksUntilForfeit
+        ? -1
+        : a.blocksUntilForfeit > b.blocksUntilForfeit
+          ? 1
+          : 0;
+    }
+    return a.dethronedAt < b.dethronedAt
+      ? 1
+      : a.dethronedAt > b.dethronedAt
+        ? -1
+        : 0;
+  });
+}
+
 function demoState(): ThroneRoomState {
   const blockNumber = 18_453_219n;
   const raw: Array<{
@@ -284,11 +321,8 @@ function demoState(): ThroneRoomState {
     },
   ];
 
-  return {
-    isDemo: true,
-    isLoading: false,
-    blockNumber,
-    entries: raw.map(({ king, earningsETH, dethronedAt, released }) => {
+  const entries: DethronedEntry[] = raw.map(
+    ({ king, earningsETH, dethronedAt, released }) => {
       const wei = parseEther(earningsETH);
       const deadline = dethronedAt + FORFEIT_BLOCKS;
       const tip = (wei * KEEPER_TIP_BPS) / 10_000n;
@@ -309,6 +343,14 @@ function demoState(): ThroneRoomState {
         toBurnWei: wei - tip,
         reasonHash: null,
       };
-    }),
+    },
+  );
+  sortByActionability(entries);
+
+  return {
+    isDemo: true,
+    isLoading: false,
+    blockNumber,
+    entries,
   };
 }

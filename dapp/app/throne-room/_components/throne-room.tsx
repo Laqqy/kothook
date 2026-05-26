@@ -92,8 +92,8 @@ export function ThroneRoom() {
         <Stat
           icon={<Asterism className="w-4 h-4" />}
           label="Reclaim Window"
-          value="3,600"
-          tail="Blocks · 3% keeper share"
+          value="~12h"
+          tail="3,600 blocks · 3% keeper share"
         />
       </div>
 
@@ -262,14 +262,7 @@ function DethronedRow({
             </div>
           </>
         ) : entry.status === 'locked' ? (
-          <>
-            <div className="font-mono text-sm text-parchment tnum">
-              {formatInt(entry.blocksUntilForfeit)} blocks
-            </div>
-            <div className="font-mono text-[10px] text-stone">
-              Keeper share · {formatWeiETH(entry.keeperTipWei, 4)} Ξ
-            </div>
-          </>
+          <LockedStatus entry={entry} />
         ) : (
           <>
             <div className="font-display text-lg text-stone">Settled</div>
@@ -384,6 +377,53 @@ function EmptyMessage({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+}
+
+/**
+ * Live "time until a vault can be reclaimed" readout. Mirrors the hero decay
+ * timer: seed from the on-chain block gap (×12s), then tick down locally each
+ * second between polls so the countdown feels alive instead of jumping every
+ * 12s. Re-seeds whenever the polled block gap changes.
+ */
+function LockedStatus({ entry }: { entry: DethronedEntry }) {
+  const secsLeft = useForfeitCountdown(entry.blocksUntilForfeit);
+  return (
+    <>
+      <div className="font-display text-lg text-parchment tnum">
+        {formatCountdown(secsLeft)}
+      </div>
+      <div className="font-mono text-[10px] text-stone tnum">
+        {formatInt(entry.blocksUntilForfeit)} blocks · keeper{' '}
+        {formatWeiETH(entry.keeperTipWei, 4)} Ξ
+      </div>
+    </>
+  );
+}
+
+function useForfeitCountdown(blocksUntilForfeit: bigint): number {
+  const [secsLeft, setSecsLeft] = useState(Number(blocksUntilForfeit) * 12);
+
+  useEffect(() => {
+    setSecsLeft(Number(blocksUntilForfeit) * 12);
+  }, [blocksUntilForfeit]);
+
+  useEffect(() => {
+    const id = setInterval(() => setSecsLeft((s) => Math.max(s - 1, 0)), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return secsLeft;
+}
+
+function formatCountdown(totalSecs: number): string {
+  const s = Math.max(0, totalSecs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  if (h > 0) return `${h}h ${pad(m)}m`;
+  if (m > 0) return `${m}m ${pad(sec)}s`;
+  return `${sec}s`;
 }
 
 function useBlocksAgo(targetBlock: bigint): bigint {
