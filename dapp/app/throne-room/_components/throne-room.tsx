@@ -31,10 +31,22 @@ export function ThroneRoom() {
   const releasedCount = room.entries.filter(
     (e) => e.status === 'released',
   ).length;
+  const lockedCount = room.entries.filter(
+    (e) => e.status === 'locked',
+  ).length;
   const totalLocked = room.entries.reduce(
     (acc, e) => acc + e.remainingWei,
     0n,
   );
+
+  // Manual filter — the reigning king and released vaults only show under
+  // "All"; "Ready" and "Locked" narrow to the two actionable states.
+  const [filter, setFilter] = useState<Filter>('all');
+  const visibleEntries = room.entries.filter((e) => {
+    if (filter === 'ready') return e.status === 'forfeitable';
+    if (filter === 'locked') return e.status === 'locked';
+    return true;
+  });
 
   return (
     <section className="relative">
@@ -97,17 +109,36 @@ export function ThroneRoom() {
         />
       </div>
 
+      {/* Filter */}
+      <div className="reveal mt-10">
+        <FilterBar
+          value={filter}
+          onChange={setFilter}
+          counts={{
+            all: room.entries.length,
+            ready: eligibleCount,
+            locked: lockedCount,
+          }}
+        />
+      </div>
+
       {/* Table */}
-      <div className="mt-12">
+      <div className="mt-6">
         {room.isLoading && room.entries.length === 0 ? (
           <EmptyMessage>Loading the ledger of the deposed…</EmptyMessage>
         ) : room.entries.length === 0 ? (
           <EmptyMessage>
             No coffers held. The realm is settled.
           </EmptyMessage>
+        ) : visibleEntries.length === 0 ? (
+          <EmptyMessage>
+            {filter === 'ready'
+              ? 'No vaults are ready to reclaim right now.'
+              : 'No vaults are currently locked.'}
+          </EmptyMessage>
         ) : (
           <ul className="space-y-3">
-            {room.entries.map((entry, i) => (
+            {visibleEntries.map((entry, i) => (
               <DethronedRow key={entry.king} entry={entry} index={i} />
             ))}
           </ul>
@@ -333,6 +364,51 @@ function ReclaimButton({ entry }: { entry: DethronedEntry }) {
     >
       {label}
     </button>
+  );
+}
+
+type Filter = 'all' | 'ready' | 'locked';
+
+function FilterBar({
+  value,
+  onChange,
+  counts,
+}: {
+  value: Filter;
+  onChange: (f: Filter) => void;
+  counts: { all: number; ready: number; locked: number };
+}) {
+  const opts: { key: Filter; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: counts.all },
+    { key: 'ready', label: 'Ready', count: counts.ready },
+    { key: 'locked', label: 'Locked', count: counts.locked },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      {opts.map((o) => {
+        const active = value === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            onClick={() => onChange(o.key)}
+            aria-pressed={active}
+            className={`font-mono text-[10px] uppercase tracking-[0.28em] px-4 py-2.5 rounded-sm border transition-all duration-200 min-h-[40px] ${
+              active
+                ? 'bg-gold text-ink border-gold-soft shadow-[0_0_0_1px_rgba(232,179,57,0.4),0_0_14px_rgba(232,179,57,0.25)]'
+                : 'border-bronze/40 text-gold-leaf hover:border-gold-leaf/60 hover:text-gold'
+            }`}
+          >
+            {o.label}
+            <span
+              className={`ml-2 tnum ${active ? 'text-ink/60' : 'text-stone'}`}
+            >
+              {o.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
